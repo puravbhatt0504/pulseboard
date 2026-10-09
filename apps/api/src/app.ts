@@ -1,3 +1,4 @@
+import { createServer as createHttpServer } from "node:http";
 import express, { type ErrorRequestHandler } from "express";
 import cookieParser from "cookie-parser";
 import type { PrismaClient } from "@prisma/client";
@@ -6,8 +7,10 @@ import { HttpError } from "./http.js";
 import { authRouter } from "./auth/routes.js";
 import { boardsRouter } from "./boards/routes.js";
 import { cardsRouter } from "./cards/routes.js";
+import { attachRealtime } from "./realtime/socket.js";
+import type { IO } from "./realtime/events.js";
 
-export type Deps = { prisma: PrismaClient; redis: Redis };
+export type Deps = { prisma: PrismaClient; redis: Redis; io?: IO };
 
 export function createApp(deps: Deps) {
   const app = express();
@@ -24,4 +27,14 @@ export function createApp(deps: Deps) {
   };
   app.use(onError);
   return app;
+}
+
+// HTTP + Socket.io on one port. Socket.io must attach after the app's request listener so it can
+// claim /socket.io/* first; routes read `withIo.io` per request, so filling it in afterwards works.
+export function createServer(deps: Omit<Deps, "io">) {
+  const withIo: Deps = { ...deps };
+  const server = createHttpServer(createApp(withIo));
+  const io = attachRealtime(server, deps);
+  withIo.io = io;
+  return { server, io };
 }
