@@ -8,7 +8,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "e2e:server": "tsx src/test/e2e-server.ts"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

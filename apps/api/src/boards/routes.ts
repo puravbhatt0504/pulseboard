@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { Deps } from "../app.js";
 import { requireAuth } from "../auth/middleware.js";
-import { h, requireString } from "../http.js";
+import { h, HttpError, requireString } from "../http.js";
 import { between } from "../cards/position.js";
 import { getBoard, invalidateBoard, requireRole } from "./service.js";
 
@@ -40,6 +40,25 @@ export function boardsRouter(deps: Deps) {
     const column = await prisma.column.create({ data: { boardId, title, position: between(last?.position ?? null, null) } });
     await invalidateBoard(deps, boardId);
     res.status(201).json(column);
+  }));
+
+  // Owner-only invite by email. Re-inviting an existing member changes their role.
+  r.post("/boards/:id/members", requireAuth, h(async (req, res) => {
+    const boardId = req.params.id;
+    if ((await requireRole(deps, boardId, req.userId, true)) !== "owner") throw new HttpError(403, "owner only");
+    const { email, role } = req.body ?? {};
+    if (typeof email !== "string" || (role !== "editor" && role !== "viewer")) {
+      throw new HttpError(400, "email and role (editor|viewer) required");
+    }
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (!user) throw new HttpError(404, "user not found");
+    if (user.id === req.userId) throw new HttpError(400, "owner cannot change own role");
+    await prisma.boardMember.upsert({
+      where: { boardId_userId: { boardId, userId: user.id } },
+      create: { boardId, userId: user.id, role },
+      update: { role },
+    });
+    res.status(201).json({ userId: user.id, email: user.email, role });
   }));
 
   return r;

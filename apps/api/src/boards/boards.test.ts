@@ -27,6 +27,12 @@ beforeAll(async () => {
 
 const get = (auth: string) => request(app).get(`/boards/${boardId}`).set("Authorization", auth);
 
+it("GET /health → 200 {db:ok, redis:ok}", async () => {
+  const res = await request(app).get("/health");
+  expect(res.status).toBe(200);
+  expect(res.body).toEqual({ db: "ok", redis: "ok" });
+});
+
 describe("access", () => {
   it("401 without token", async () => {
     expect((await request(app).get("/boards")).status).toBe(401);
@@ -51,6 +57,20 @@ describe("access", () => {
   it("non-member write → 404", async () => {
     const res = await request(app).post(`/boards/${boardId}/columns`).set("Authorization", stranger.auth).send({ title: "x" });
     expect(res.status).toBe(404);
+  });
+});
+
+describe("members", () => {
+  it("owner invites by email; non-owner 403; unknown email 404", async () => {
+    const invitee = await prisma.user.create({ data: { email: uniqueEmail(), passwordHash: "x" } });
+    const invite = (auth: string, email: string, role = "editor") =>
+      request(app).post(`/boards/${boardId}/members`).set("Authorization", auth).send({ email, role });
+    expect((await invite(viewer.auth, invitee.email)).status).toBe(403);
+    expect((await invite(owner.auth, "nobody@test.dev")).status).toBe(404);
+    expect((await invite(owner.auth, invitee.email, "owner")).status).toBe(400);
+    expect((await invite(owner.auth, invitee.email)).status).toBe(201);
+    const auth = `Bearer ${signAccess({ userId: invitee.id })}`;
+    expect((await get(auth)).status).toBe(200);
   });
 });
 

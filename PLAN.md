@@ -74,6 +74,7 @@ Prisma models: `User`, `Board`, `BoardMember(role: owner|editor|viewer)`, `Colum
   - `POST /boards/:id/columns`, `POST /columns/:id/cards`
   - `PATCH /cards/:id {title?, description?, columnId?, before?, after?}` → moves compute position from neighbours
   - viewer attempting a write → `403`
+  - `POST /boards/:id/members {email, role: editor|viewer}` → owner only (`403` otherwise), unknown email `404`, re-invite updates role → `201` *(added in Phase 4: collaboration needs a way to share a board)*
 - `GET /boards/:id` cached in Redis key `board:{id}` (60 s TTL), invalidated on any write to that board.
 
 **Done:** `position.test.ts` asserts the three examples above plus 1,000 random inserts stay strictly ordered; `boards.test.ts` asserts non-member 404, viewer write 403, cache hit returns same body and a write invalidates it.
@@ -135,7 +136,7 @@ OAuth providers, GraphQL, mobile app, Kubernetes, billing.
 - [x] Phase 1 Auth
 - [x] Phase 2 REST
 - [x] Phase 3 Realtime
-- [ ] Phase 4 Frontend
+- [x] Phase 4 Frontend
 - [ ] Phase 5 Uploads + RelayQ
 - [ ] Phase 6 Docker / CI / AWS
 - [ ] Phase 7 Load test

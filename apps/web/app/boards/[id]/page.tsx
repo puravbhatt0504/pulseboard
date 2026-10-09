@@ -1,0 +1,302 @@
+"use client";
+
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { io, type Socket } from "socket.io-client";
+import {
+  DndContext,
+  PointerSensor,
+  pointerWithin,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type CollisionDetection,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { api, ApiError, API_URL, getToken, refresh } from "@/lib/api";
+
+type Card = { id: string; columnId: string; title: string; position: string };
+type Column = { id: string; title: string; cards: Card[] };
+type Board = { id: string; title: string; columns: Column[] };
+type User = { id: string; name: string; color: string };
+
+const CURSOR_INTERVAL_MS = 50; // ≤ 20/s, matches the server throttle
+
+// Server-confirmed card: drop it from wherever it was, re-insert by (position, id).
+function upsertCard(board: Board, card: Card): Board {
+  return {
+    ...board,
+    columns: board.columns.map((col) => {
+      const cards = col.cards.filter((c) => c.id !== card.id);
+      if (col.id === card.columnId) {
+        cards.push(card);
+        cards.sort((a, b) => (a.position < b.position ? -1 : a.position > b.position ? 1 : a.id < b.id ? -1 : 1));
+      }
+      return { ...col, cards };
+    }),
+  };
+}
+
+// Optimistic placement before the server assigns a position: splice by index.
+function placeCard(board: Board, cardId: string, columnId: string, beforeCardId: string | null): Board {
+  const card = board.columns.flatMap((c) => c.cards).find((c) => c.id === cardId);
+  if (!card) return board;
+  return {
+    ...board,
+    columns: board.columns.map((col) => {
+      const cards = col.cards.filter((c) => c.id !== cardId);
+      if (col.id === columnId) {
+        const i = beforeCardId ? cards.findIndex((c) => c.id === beforeCardId) : -1;
+        cards.splice(i === -1 ? cards.length : i, 0, { ...card, columnId });
+      }
+      return { ...col, cards };
+    }),
+  };
+}
+
+// Prefer the card under the pointer over the column that contains it.
+const collision: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  const onCard = hits.filter((h) => String(h.id).startsWith("card:"));
+  return onCard.length ? onCard : hits;
+};
+
+export default function BoardPage() {
+  const { id: boardId } = useParams<{ id: string }>();
+  const router = useRouter();
+  const [board, setBoard] = useState<Board | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "missing">("loading");
+  const [users, setUsers] = useState<User[]>([]);
+  const [cursors, setCursors] = useState<Record<string, { x: number; y: number }>>({});
+  const [error, setError] = useState("");
+  const socketRef = useRef<Socket | null>(null);
+  const areaRef = useRef<HTMLDivElement>(null);
+  const lastCursor = useRef(0);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  useEffect(() => {
+    let socket: Socket | undefined;
+    let cancelled = false;
+    api<Board>(`/boards/${boardId}`)
+      .then((b) => {
+        if (cancelled) return;
+        setBoard(b);
+        setStatus("ready");
+        // Connect only once the token exists (the board fetch may have just refreshed it).
+        socket = io(API_URL, { auth: (cb) => cb({ token: getToken() }), transports: ["websocket"] });
+        socketRef.current = socket;
+        socket.on("connect", () => socket!.emit("join_board", { boardId }));
+        socket.on("connect_error", async (err) => {
+          if (err.message === "unauthorized" && (await refresh())) socket!.connect();
+        });
+        for (const evt of ["card:created", "card:updated", "card:moved"] as const) {
+          socket.on(evt, ({ card }: { card: Card }) => setBoard((prev) => prev && upsertCard(prev, card)));
+        }
+        socket.on("presence:update", ({ users }: { users: User[] }) => {
+          setUsers(users);
+          const present = new Set(users.map((u) => u.id));
+          setCursors((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => present.has(id))));
+        });
+        socket.on("cursor", ({ userId, x, y }: { userId: string; x: number; y: number }) =>
+          setCursors((prev) => ({ ...prev, [userId]: { x, y } })),
+        );
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        if (e instanceof ApiError && e.status === 401) router.replace("/login");
+        else setStatus("missing");
+      });
+    return () => {
+      cancelled = true;
+      socket?.close();
+    };
+  }, [boardId, router]);
+
+  function onPointerMove(e: React.PointerEvent) {
+    const now = Date.now();
+    if (!areaRef.current || now - lastCursor.current < CURSOR_INTERVAL_MS) return;
+    lastCursor.current = now;
+    const rect = areaRef.current.getBoundingClientRect();
+    socketRef.current?.emit("cursor", { x: Math.round(e.clientX - rect.left), y: Math.round(e.clientY - rect.top) });
+  }
+
+  async function onDragEnd({ active, over }: DragEndEvent) {
+    if (!board || !over) return;
+    const cardId = String(active.id);
+    const [kind, targetId] = String(over.id).split(":");
+    let columnId: string;
+    let beforeCardId: string | null = null;
+    if (kind === "card") {
+      if (targetId === cardId) return;
+      columnId = board.columns.find((c) => c.cards.some((k) => k.id === targetId))!.id;
+      beforeCardId = targetId;
+    } else {
+      columnId = targetId;
+    }
+    const snapshot = board;
+    setBoard(placeCard(board, cardId, columnId, beforeCardId));
+    try {
+      // API: `after` = the card that ends up directly below the moved one; omitted = append.
+      const card = await api<Card>(`/cards/${cardId}`, {
+        method: "PATCH",
+        body: beforeCardId ? { columnId, after: beforeCardId } : { columnId },
+      });
+      setBoard((prev) => prev && upsertCard(prev, card));
+    } catch (e) {
+      setBoard(snapshot);
+      setError(`Move failed: ${(e as Error).message}`);
+    }
+  }
+
+  async function addColumn(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const title = new FormData(form).get("title");
+    try {
+      const col = await api<Column>(`/boards/${boardId}/columns`, { method: "POST", body: { title } });
+      setBoard((prev) => prev && { ...prev, columns: [...prev.columns, { ...col, cards: [] }] });
+      form.reset();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function addCard(e: React.FormEvent<HTMLFormElement>, columnId: string) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const title = new FormData(form).get("title");
+    try {
+      const card = await api<Card>(`/columns/${columnId}/cards`, { method: "POST", body: { title } });
+      setBoard((prev) => prev && upsertCard(prev, card));
+      form.reset();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function invite(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const data = new FormData(form);
+    try {
+      await api(`/boards/${boardId}/members`, { method: "POST", body: { email: data.get("email"), role: data.get("role") } });
+      form.reset();
+      setError("");
+    } catch (err) {
+      setError(`Invite failed: ${(err as Error).message}`);
+    }
+  }
+
+  if (status === "loading") return <p className="p-8 text-zinc-500">Loading…</p>;
+  if (status === "missing" || !board) return <p className="p-8">Board not found.</p>;
+
+  return (
+    <main className="flex min-h-screen flex-col">
+      <header className="flex flex-wrap items-center gap-4 border-b border-zinc-200 bg-white px-6 py-3">
+        <h1 className="text-xl font-semibold">{board.title}</h1>
+        <div className="flex -space-x-2" aria-label="Online now">
+          {users.map((u) => (
+            <span
+              key={u.id}
+              data-testid="presence-avatar"
+              title={u.name}
+              style={{ background: u.color }}
+              className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-xs font-semibold text-white"
+            >
+              {u.name.slice(0, 2).toUpperCase()}
+            </span>
+          ))}
+        </div>
+        <form onSubmit={invite} className="ml-auto flex gap-2 text-sm">
+          <input name="email" type="email" required placeholder="Invite by email" className="rounded border border-zinc-300 px-2 py-1" />
+          <select name="role" className="rounded border border-zinc-300 px-2 py-1" defaultValue="editor">
+            <option value="editor">editor</option>
+            <option value="viewer">viewer</option>
+          </select>
+          <button className="rounded bg-zinc-900 px-3 py-1 text-white">Invite</button>
+        </form>
+      </header>
+      {error && (
+        <p role="alert" className="bg-red-50 px-6 py-2 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+      <div ref={areaRef} onPointerMove={onPointerMove} className="relative flex-1 overflow-x-auto p-6">
+        <DndContext sensors={sensors} collisionDetection={collision} onDragEnd={onDragEnd}>
+          <div className="flex items-start gap-4">
+            {board.columns.map((col) => (
+              <ColumnView key={col.id} column={col} onAddCard={addCard} />
+            ))}
+            <form onSubmit={addColumn} className="w-64 shrink-0">
+              <input name="title" required maxLength={200} placeholder="+ Add column" className="w-full rounded border border-dashed border-zinc-300 bg-transparent px-3 py-2" />
+            </form>
+          </div>
+        </DndContext>
+        {Object.entries(cursors).map(([userId, pos]) => {
+          const user = users.find((u) => u.id === userId);
+          return (
+            <div
+              key={userId}
+              data-testid={`cursor-${userId}`}
+              className="pointer-events-none absolute z-50 transition-transform duration-75"
+              style={{ left: 0, top: 0, transform: `translate(${pos.x}px, ${pos.y}px)` }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+                <path d="M0 0 L0 14 L4 10 L8 16 L10 15 L6 9 L12 9 Z" fill={user?.color ?? "#000"} />
+              </svg>
+              <span className="ml-3 rounded px-1 text-xs text-white" style={{ background: user?.color ?? "#000" }}>
+                {user?.name}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </main>
+  );
+}
+
+function ColumnView({ column, onAddCard }: { column: Column; onAddCard: (e: React.FormEvent<HTMLFormElement>, columnId: string) => void }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `col:${column.id}` });
+  return (
+    <section
+      ref={setNodeRef}
+      data-testid="column"
+      data-column-id={column.id}
+      className={`w-64 shrink-0 rounded-lg p-3 ${isOver ? "bg-zinc-200" : "bg-zinc-100"}`}
+    >
+      <h2 className="mb-3 font-medium">{column.title}</h2>
+      <ul className="min-h-8 space-y-2">
+        {column.cards.map((card) => (
+          <CardView key={card.id} card={card} />
+        ))}
+      </ul>
+      <form onSubmit={(e) => onAddCard(e, column.id)} className="mt-3">
+        <input name="title" required maxLength={200} placeholder="+ Add card" className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm" />
+      </form>
+    </section>
+  );
+}
+
+function CardView({ card }: { card: Card }) {
+  const drag = useDraggable({ id: card.id });
+  const drop = useDroppable({ id: `card:${card.id}` });
+  const style = drag.transform ? { transform: `translate(${drag.transform.x}px, ${drag.transform.y}px)` } : undefined;
+  return (
+    <li
+      ref={(el) => {
+        drag.setNodeRef(el);
+        drop.setNodeRef(el);
+      }}
+      {...drag.listeners}
+      {...drag.attributes}
+      style={style}
+      data-testid="card"
+      className={`cursor-grab rounded border bg-white px-3 py-2 text-sm shadow-sm ${drag.isDragging ? "relative z-10 opacity-80" : ""} ${
+        drop.isOver && !drag.isDragging ? "border-t-4 border-t-zinc-900" : "border-zinc-200"
+      }`}
+    >
+      {card.title}
+    </li>
+  );
+}
