@@ -133,7 +133,7 @@ OAuth providers, GraphQL, mobile app, Kubernetes, billing.
 
 ## Status
 - [x] Phase 1 Auth
-- [ ] Phase 2 REST
+- [x] Phase 2 REST
 - [ ] Phase 3 Realtime
 - [ ] Phase 4 Frontend
 - [ ] Phase 5 Uploads + RelayQ
