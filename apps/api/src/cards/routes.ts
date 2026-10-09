@@ -2,7 +2,8 @@ import { Router } from "express";
 import type { Deps } from "../app.js";
 import { requireAuth } from "../auth/middleware.js";
 import { h, HttpError, requireString } from "../http.js";
-import { createCard, updateCard } from "./service.js";
+import { cardBoard, createCard, updateCard } from "./service.js";
+import { presignAttachment } from "../uploads/s3.js";
 import { emitCard } from "../realtime/events.js";
 
 const optional = (v: unknown, field: string, max: number) => (v === undefined ? undefined : requireString(v, field, max));
@@ -34,6 +35,12 @@ export function cardsRouter(deps: Deps) {
     });
     emitCard(deps.io, boardId, moved ? "card:moved" : "card:updated", card, req.userId);
     res.json(card);
+  }));
+
+  r.post("/cards/:id/attachments/presign", requireAuth, h(async (req, res) => {
+    await cardBoard(deps, req.userId, req.params.id, true);
+    const { filename, contentType, size } = req.body ?? {};
+    res.json(await presignAttachment(req.params.id, filename, contentType, size));
   }));
 
   return r;

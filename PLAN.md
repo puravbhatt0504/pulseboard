@@ -103,10 +103,11 @@ Prisma models: `User`, `Board`, `BoardMember(role: owner|editor|viewer)`, `Colum
 
 ## Phase 5 — Uploads + RelayQ integration
 
-- `POST /cards/:id/attachments/presign {filename, contentType}` → `{url, key}` (S3 PUT, 5 min, ≤ 10 MB, image/pdf only else `400`).
+- `POST /cards/:id/attachments/presign {filename, contentType, size}` → `{url, key}` (S3 PUT, 5 min, ≤ 10 MB, image/pdf only else `400`). *`size` added: a presigned PUT can only cap size if `ContentLength` is signed.*
 - `src/jobs/relayq.ts`: `enqueue(type, payload) → {jobId}` via `POST {RELAYQ_URL}/jobs`, header `Authorization: Bearer RELAYQ_API_KEY`.
   - `POST /boards/:id/export` → enqueues `board.export` → `202 {jobId}`
-  - nightly digest: enqueues `email.digest` per user with activity in the last 24 h
+  - nightly digest (`src/jobs/digest-cli.ts`, run by a scheduled task): enqueues `email.digest` per member of a board with *other members'* activity in the last 24 h; idempotency key `digest:{userId}:{UTC date}`
+  - RelayQ 4xx (our payload/key is wrong) → `502`
 - RelayQ down → export returns `503`, never 500.
 
 **Done:** test with a mocked RelayQ asserts correct payload and 202; RelayQ unreachable → 503. Presign rejects `application/x-msdownload` with 400.
@@ -137,6 +138,6 @@ OAuth providers, GraphQL, mobile app, Kubernetes, billing.
 - [x] Phase 2 REST
 - [x] Phase 3 Realtime
 - [x] Phase 4 Frontend
-- [ ] Phase 5 Uploads + RelayQ
+- [x] Phase 5 Uploads + RelayQ
 - [ ] Phase 6 Docker / CI / AWS
 - [ ] Phase 7 Load test

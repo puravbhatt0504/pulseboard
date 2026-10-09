@@ -4,6 +4,7 @@ import { requireAuth } from "../auth/middleware.js";
 import { h, HttpError, requireString } from "../http.js";
 import { between } from "../cards/position.js";
 import { getBoard, invalidateBoard, requireRole } from "./service.js";
+import { enqueue } from "../jobs/relayq.js";
 
 export function boardsRouter(deps: Deps) {
   const { prisma } = deps;
@@ -59,6 +60,16 @@ export function boardsRouter(deps: Deps) {
       update: { role },
     });
     res.status(201).json({ userId: user.id, email: user.email, role });
+  }));
+
+  // Any member may export. RelayQ fetches the board and POSTs {jobId, url} to callbackUrl when done.
+  r.post("/boards/:id/export", requireAuth, h(async (req, res) => {
+    const boardId = req.params.id;
+    await requireRole(deps, boardId, req.userId, false);
+    const format = req.body?.format ?? "json";
+    if (format !== "json" && format !== "csv") throw new HttpError(400, "format must be json or csv");
+    const callbackUrl = `${process.env.PUBLIC_API_URL ?? "http://localhost:4000"}/boards/${boardId}/export/callback`;
+    res.status(202).json(await enqueue("board.export", { boardId, format, callbackUrl }));
   }));
 
   return r;

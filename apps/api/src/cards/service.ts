@@ -11,6 +11,14 @@ async function columnBoard({ prisma }: Deps, columnId: string) {
   return col.boardId;
 }
 
+// Resolves a card's board and checks the caller's role on it.
+export async function cardBoard(deps: Deps, userId: string, cardId: string, write: boolean) {
+  const card = await deps.prisma.card.findUnique({ where: { id: cardId }, select: { column: { select: { boardId: true } } } });
+  if (!card) throw new HttpError(404, "card not found");
+  await requireRole(deps, card.column.boardId, userId, write);
+  return card.column.boardId;
+}
+
 export async function createCard(deps: Deps, userId: string, columnId: string, title: string, description = "") {
   const { prisma } = deps;
   const boardId = await columnBoard(deps, columnId);
