@@ -132,7 +132,7 @@ Prisma models: `User`, `Board`, `BoardMember(role: owner|editor|viewer)`, `Colum
 OAuth providers, GraphQL, mobile app, Kubernetes, billing.
 
 ## Status
-- [ ] Phase 1 Auth
+- [x] Phase 1 Auth
 - [ ] Phase 2 REST
 - [ ] Phase 3 Realtime
 - [ ] Phase 4 Frontend

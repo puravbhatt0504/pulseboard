@@ -1,0 +1,9 @@
+{
+  "name": "pulseboard",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "test": "npm test -w apps/api",
+    "typecheck": "npm run typecheck -w apps/api"
+  }
+}
