@@ -22,10 +22,18 @@ RUN apk add --no-cache python3 make g++
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
-RUN npm ci -w apps/api --include-workspace-root=false --omit=dev --ignore-scripts && npm rebuild argon2
+# --omit=optional too: the lockfile marks prisma/typescript/effect "devOptional" (peers of @prisma/client),
+# which --omit=dev alone keeps. The wasm engines are for edge/driver-adapter runtimes; we use the native
+# library engine in .prisma/client (verified: test suite passes with them removed).
+RUN npm ci -w apps/api --include-workspace-root=false --omit=dev --omit=optional --ignore-scripts \
+ && npm rebuild argon2 \
+ && rm -f node_modules/@prisma/client/runtime/*wasm*
 
 FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
+# The container only runs `node`; package managers are ~20 MB of the 200 MB budget.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn* \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 WORKDIR /repo
 COPY --from=prod-deps /repo/node_modules node_modules
 COPY --from=build /repo/node_modules/.prisma node_modules/.prisma
