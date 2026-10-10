@@ -10,3 +10,4 @@ test-results/
 playwright-report/
 cdk.out/
 *.tsbuildinfo
+infra/*outputs.json
