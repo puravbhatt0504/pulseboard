@@ -128,6 +128,37 @@ Prisma models: `User`, `Board`, `BoardMember(role: owner|editor|viewer)`, `Colum
 
 **Done:** k6 run against the 2-task prod deploy reports `p(95) < 80ms` broadcast latency and `< 1%` errors. Paste the summary into `README.md`. If it fails, the resume line changes to the real number — never the other way round.
 
+## Phase 8 — Conflict-free editing + offline (CRDT) — the "advanced" upgrade
+
+Today two people editing the same card description is last-write-wins: one edit is silently lost. Replace it with a CRDT.
+
+- Card `description` becomes a **Yjs `Y.Text`** document. Titles/positions stay REST (fractional positions already merge cleanly).
+- `apps/api/src/collab/`:
+  - `yjs-server.ts` — `y-protocols` sync over the existing Socket.io connection, room `card:{id}`; membership-checked like `join_board`. Viewers get read-only (server drops their update messages).
+  - `persistence.ts` — store state as `Bytes` in `CardDoc{cardId, state, updatedAt}`; apply incoming updates with `Y.applyUpdate`, debounce-write every 2 s and on last disconnect. Compact (`Y.encodeStateAsUpdate`) when the stored update log exceeds 1 MB.
+  - Fan-out across instances through the Redis adapter (updates are binary `Uint8Array`).
+- `apps/web`: TipTap editor with `@tiptap/extension-collaboration` + collaboration cursors (names/colors from presence).
+- **Offline:** `y-indexeddb` keeps the doc locally; edits made offline sync and merge on reconnect. Board-level REST writes made offline are queued in IndexedDB and replayed in order on reconnect; a replay that now 403/404s is dropped and shown as a toast, not retried forever.
+- Search/export still need plain text: on persist, write `Card.descriptionText = ydoc.getText().toString()`.
+
+Examples:
+- A types "hello" at 0 and B types "world" at 0 concurrently → both converge to the same string containing both words (order decided by Yjs client IDs), never one lost.
+- A goes offline, edits, B edits the same paragraph online; A reconnects → both edits present on both screens within 1 s.
+
+**Done:**
+- `collab.test.ts`: two `Y.Doc` clients through two API instances apply 1,000 random concurrent inserts/deletes; final `toString()` is identical on both clients and on a fresh client loading from Postgres.
+- Viewer update message → server state unchanged.
+- Playwright `e2e/offline.spec.ts`: context A `setOffline(true)`, edits description, B edits same card, A `setOffline(false)` → both texts contain both edits.
+- Restart the API mid-session → reconnecting clients lose nothing (state reloaded from `CardDoc`).
+
+## Phase 9 — End-to-end tracing (shared with RelayQ)
+
+- OpenTelemetry Node SDK in `apps/api/src/otel.ts` (loaded before anything else), auto-instrumenting http, express, pg/prisma, ioredis; Socket.io handlers wrapped in manual spans `socket.<event>`.
+- `src/jobs/relayq.ts` injects W3C `traceparent` into the RelayQ request; RelayQ continues the trace (its Phase 8).
+- Export to an OTLP collector → Jaeger in compose; AWS X-Ray (via ADOT collector) in prod.
+
+**Done:** in compose, `POST /boards/:id/export` produces **one** trace in Jaeger containing spans from `pulseboard-api` → `relayq-api` → `relayq-worker` → the callback back into `pulseboard-api`. Test `otel.test.ts` asserts the outgoing RelayQ request carries a `traceparent` header whose trace-id equals the active span's.
+
 ---
 
 ## Out of scope (until a phase needs it)
@@ -141,3 +172,5 @@ OAuth providers, GraphQL, mobile app, Kubernetes, billing.
 - [x] Phase 5 Uploads + RelayQ
 - [ ] Phase 6 Docker / CI / AWS
 - [ ] Phase 7 Load test
+- [ ] Phase 8 CRDT editing + offline
+- [ ] Phase 9 Tracing
