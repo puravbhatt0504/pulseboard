@@ -1,5 +1,7 @@
 # Build context: repo root.  docker build -f apps/api/Dockerfile -t pulseboard-api .
+# argon2 has no musl prebuild, so stages that install it need a C++ toolchain; the runtime image doesn't.
 FROM node:20-alpine AS build
+RUN apk add --no-cache python3 make g++
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
@@ -13,16 +15,21 @@ FROM build AS migrate
 WORKDIR /repo/apps/api
 CMD ["npx", "prisma", "migrate", "deploy"]
 
-FROM node:20-alpine AS runtime
-ENV NODE_ENV=production
+# Production node_modules only. --ignore-scripts skips the api postinstall (`prisma generate`, a devDependency);
+# argon2 is then compiled explicitly and the generated Prisma client is copied from `build`.
+FROM node:20-alpine AS prod-deps
+RUN apk add --no-cache python3 make g++
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
-# --ignore-scripts: postinstall runs `prisma generate`, but the CLI is a devDependency; copy the client instead.
-RUN npm ci -w apps/api --include-workspace-root=false --omit=dev --ignore-scripts \
- && npm rebuild argon2 \
- && npm cache clean --force
+RUN npm ci -w apps/api --include-workspace-root=false --omit=dev --ignore-scripts && npm rebuild argon2
+
+FROM node:20-alpine AS runtime
+ENV NODE_ENV=production
+WORKDIR /repo
+COPY --from=prod-deps /repo/node_modules node_modules
 COPY --from=build /repo/node_modules/.prisma node_modules/.prisma
+COPY apps/api/package.json apps/api/
 COPY --from=build /repo/apps/api/dist apps/api/dist
 WORKDIR /repo/apps/api
 USER node
