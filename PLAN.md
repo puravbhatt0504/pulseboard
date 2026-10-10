@@ -170,7 +170,7 @@ OAuth providers, GraphQL, mobile app, Kubernetes, billing.
 - [x] Phase 3 Realtime
 - [x] Phase 4 Frontend
 - [x] Phase 5 Uploads + RelayQ
-- [ ] Phase 6 Docker / CI / AWS
+- [ ] Phase 6 Docker / CI / AWS — CI green on main, api image 183 MB, container /health ok; **pending: AWS infra + deploy + prod /health**
 - [ ] Phase 7 Load test
 - [ ] Phase 8 CRDT editing + offline
 - [ ] Phase 9 Tracing
