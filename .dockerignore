@@ -1,0 +1,8 @@
+**/node_modules
+**/dist
+**/.next
+**/.pgdata-*
+**/test-results
+**/playwright-report
+.git
+.env*

@@ -1,0 +1,47 @@
+# docker compose up  →  app at http://localhost:3000, API at http://localhost:4000
+x-api-env: &api-env
+  DATABASE_URL: postgresql://postgres:postgres@postgres:5432/pulseboard
+  REDIS_URL: redis://redis:6379
+  JWT_ACCESS_SECRET: dev-access-secret-change-me
+  JWT_REFRESH_SECRET: dev-refresh-secret-change-me
+  WEB_ORIGIN: http://localhost:3000
+  PUBLIC_API_URL: http://localhost:4000
+  RELAYQ_URL: ${RELAYQ_URL:-}
+  RELAYQ_API_KEY: ${RELAYQ_API_KEY:-}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: pulseboard }
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD", "pg_isready", "-U", "postgres"], interval: 2s, retries: 30 }
+
+  redis:
+    image: redis:7-alpine
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 2s, retries: 30 }
+
+  migrate:
+    build: { context: ., dockerfile: apps/api/Dockerfile, target: migrate }
+    environment: *api-env
+    depends_on: { postgres: { condition: service_healthy } }
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    image: pulseboard-api
+    environment: *api-env
+    ports: ["4000:4000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args: { NEXT_PUBLIC_API_URL: http://localhost:4000 }
+    image: pulseboard-web
+    ports: ["3000:3000"]
+    depends_on: [api]
+
+volumes:
+  pgdata:
