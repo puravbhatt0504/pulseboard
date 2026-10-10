@@ -8,7 +8,9 @@ Tags.of(app).add("project", "pulseboard");
 
 const data = new DataStack(app, "PulseboardData", { env });
 
-// Images are built and pushed by CI, so the app stack only exists when a tag is given:
-//   npx cdk deploy PulseboardApp -c imageTag=<git sha>
-const imageTag = app.node.tryGetContext("imageTag");
-if (imageTag) new AppStack(app, "PulseboardApp", { env, data, imageTag });
+// Images are built and pushed by CI, which deploys with the git sha:
+//   npx cdk deploy PulseboardApp --exclusively -c imageTag=<sha>
+// The app stack is always defined (placeholder tag otherwise) because its weak cross-stack references
+// make PulseboardData publish the outputs it reads; synthesizing Data alone would drop them.
+const imageTag = app.node.tryGetContext("imageTag") ?? "no-image-tag";
+new AppStack(app, "PulseboardApp", { env, data, imageTag });
