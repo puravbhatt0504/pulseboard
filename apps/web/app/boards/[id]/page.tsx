@@ -14,7 +14,7 @@ import {
   type CollisionDetection,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { api, ApiError, API_URL, getToken, refresh } from "@/lib/api";
+import { api, ApiError, getToken, refresh, SOCKET_URL } from "@/lib/api";
 
 type Card = { id: string; columnId: string; title: string; position: string };
 type Column = { id: string; title: string; cards: Card[] };
@@ -84,7 +84,7 @@ export default function BoardPage() {
         setBoard(b);
         setStatus("ready");
         // Connect only once the token exists (the board fetch may have just refreshed it).
-        socket = io(API_URL, { auth: (cb) => cb({ token: getToken() }), transports: ["websocket"] });
+        socket = io(SOCKET_URL, { auth: (cb) => cb({ token: getToken() }), transports: ["websocket"] });
         socketRef.current = socket;
         socket.on("connect", () => socket!.emit("join_board", { boardId }));
         socket.on("connect_error", async (err) => {

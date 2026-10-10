@@ -118,6 +118,14 @@ Prisma models: `User`, `Board`, `BoardMember(role: owner|editor|viewer)`, `Colum
 - Multi-stage `Dockerfile` for api (final image < 200 MB).
 - `.github/workflows/ci.yml`: lint, typecheck, unit tests with Postgres+Redis service containers, Playwright, build images.
 - AWS: ECS Fargate (2 api tasks behind ALB with sticky sessions off — adapter handles it), RDS Postgres, ElastiCache Redis, S3, secrets in SSM Parameter Store. Deploy on push to `main`.
+- **AWS contract (CDK, TypeScript, `infra/`, account 934846852308, `ap-south-1`):**
+  - `infra/bin/app.ts` → two stacks:
+    - `PulseboardData`: VPC (2 AZ, public + isolated subnets, **0 NAT**), ECR repos `pulseboard-api` / `pulseboard-web`, RDS Postgres 16 `db.t4g.micro` (isolated, generated password in Secrets Manager), ElastiCache Redis 7 `cache.t4g.micro` (isolated), S3 attachments bucket (private, CORS PUT), GitHub OIDC role trusted only for `repo:puravbhatt0504/pulseboard:ref:refs/heads/main`.
+    - `PulseboardApp` (context `imageTag` required): ALB (ingress only from the CloudFront origin-facing prefix list), Fargate `api` ×2 (port 4000, init container runs `prisma migrate deploy`) and `web` ×1 (port 3000), tasks in public subnets with SGs allowing only the ALB; CloudFront in front: `/api/*` + `/socket.io/*` → api, `/*` → web, caching disabled except `/_next/static/*`.
+  - Secrets: JWT secrets are SSM SecureStrings `/pulseboard/jwt-access-secret`, `/pulseboard/jwt-refresh-secret` (created out-of-band; CloudFormation can't create SecureStrings). DB password injected from Secrets Manager.
+  - App changes: `API_BASE_PATH` (prod `/api`) prefixes every route and the refresh-cookie path; `GET {base}/health`; `DATABASE_URL` composed from `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` when unset; web `NEXT_PUBLIC_API_URL=/api`, `NEXT_PUBLIC_SOCKET_URL=/`.
+  - CI `deploy` job (push to `main`, only if repo var `AWS_DEPLOY_ROLE_ARN` is set): OIDC → build + push both images tagged `${{ github.sha }}` → `cdk deploy PulseboardApp -c imageTag=<sha>`.
+  - **Checks:** `cd infra && npx cdk synth --strict` exits 0; `apps/api` test: with `API_BASE_PATH=/api`, `GET /api/health` → 200, `GET /health` → 404, login cookie has `Path=/api/auth`. After deploy: `curl https://<cloudfront>/api/health` → `200 {"db":"ok","redis":"ok"}`.
 
 **Done:** CI green on `main`; `curl https://<prod>/health` → `200 {"db":"ok","redis":"ok"}`; `docker image ls pulseboard-api` size < 200 MB.
 

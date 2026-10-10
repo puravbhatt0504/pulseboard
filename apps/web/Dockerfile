@@ -6,7 +6,8 @@ COPY apps/web/package.json apps/web/
 RUN npm ci -w apps/web --include-workspace-root=false
 COPY apps/web apps/web
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
 RUN npm run build -w apps/web
 
 FROM node:20-alpine

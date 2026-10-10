@@ -1,9 +1,9 @@
 import { createServer as createHttpServer } from "node:http";
-import express, { type ErrorRequestHandler } from "express";
+import express, { Router, type ErrorRequestHandler } from "express";
 import cookieParser from "cookie-parser";
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
-import { h, HttpError } from "./http.js";
+import { apiBasePath, h, HttpError } from "./http.js";
 import { authRouter } from "./auth/routes.js";
 import { boardsRouter } from "./boards/routes.js";
 import { cardsRouter } from "./cards/routes.js";
@@ -29,15 +29,18 @@ export function createApp(deps: Deps) {
     next();
   });
   app.use(express.json(), cookieParser());
-  app.get("/health", h(async (_req, res) => {
+  // Prod serves web and API on one CloudFront host, so the API lives under /api there; "" locally.
+  const api = Router();
+  api.get("/health", h(async (_req, res) => {
     const [db, redis] = await Promise.all([
       deps.prisma.$queryRaw`SELECT 1`.then(() => "ok", () => "down"),
       deps.redis.ping().then(() => "ok", () => "down"),
     ]);
     res.status(db === "ok" && redis === "ok" ? 200 : 503).json({ db, redis });
   }));
-  app.use("/auth", authRouter(deps));
-  app.use(boardsRouter(deps), cardsRouter(deps));
+  api.use("/auth", authRouter(deps));
+  api.use(boardsRouter(deps), cardsRouter(deps));
+  app.use(apiBasePath() || "/", api);
 
   const onError: ErrorRequestHandler = (err, _req, res, _next) => {
     if (err instanceof HttpError) return void res.status(err.status).json({ error: err.message });

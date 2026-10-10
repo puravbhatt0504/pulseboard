@@ -2,11 +2,12 @@
   "name": "pulseboard",
   "private": true,
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "infra"
   ],
   "scripts": {
     "test": "npm test -w apps/api",
-    "typecheck": "npm run typecheck -w apps/api && npm run typecheck -w apps/web",
+    "typecheck": "npm run typecheck -w apps/api && npm run typecheck -w apps/web && npm run typecheck -w infra",
     "lint": "eslint ."
   },
   "devDependencies": {

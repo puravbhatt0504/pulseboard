@@ -1,0 +1,13 @@
+{
+  "availability-zones:account=934846852308:region=ap-south-1": [
+    "ap-south-1a",
+    "ap-south-1b",
+    "ap-south-1c"
+  ],
+  "cc-api-provider:account=934846852308:expectedMatchCount=exactly-one:propertiesToReturn.0=PrefixListId:propertyMatch.PrefixListName=com.amazonaws.global.cloudfront.origin-facing:region=ap-south-1:typeName=AWS$:$:EC2$:$:PrefixList": [
+    {
+      "PrefixListId": "pl-9aa247f3",
+      "Identifier": "pl-9aa247f3"
+    }
+  ]
+}

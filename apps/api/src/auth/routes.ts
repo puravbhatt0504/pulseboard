@@ -1,25 +1,25 @@
 import { Router, type Response } from "express";
 import { Prisma } from "@prisma/client";
 import type { Deps } from "../app.js";
-import { h } from "../http.js";
+import { apiBasePath, h } from "../http.js";
 import { hashPassword, verifyPassword } from "./password.js";
 import { signAccess, signRefresh, verifyRefresh, REFRESH_TTL_MS } from "./jwt.js";
 
 const LOGIN_LIMIT = 5;
 const LOGIN_WINDOW_S = 15 * 60;
 const COOKIE = "refresh";
-const cookieOpts = {
-  httpOnly: true,
-  sameSite: "strict" as const,
-  secure: process.env.NODE_ENV === "production",
-  path: "/auth",
-};
 
 // Verified against on unknown email so both 401 paths cost the same.
 const dummyHash = hashPassword("timing-equaliser");
 
 export function authRouter({ prisma, redis }: Deps) {
   const r = Router();
+  const cookieOpts = {
+    httpOnly: true,
+    sameSite: "strict" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: `${apiBasePath()}/auth`,
+  };
 
   async function issueRefresh(res: Response, userId: string) {
     const row = await prisma.refreshToken.create({

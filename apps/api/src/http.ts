@@ -16,3 +16,6 @@ export function requireString(v: unknown, field: string, max = 200): string {
   if (typeof v !== "string" || !v.trim() || v.length > max) throw new HttpError(400, `${field} must be 1-${max} chars`);
   return v.trim();
 }
+
+// Prod serves web and API on one host, so every API route (and the refresh cookie) lives under /api there.
+export const apiBasePath = () => process.env.API_BASE_PATH ?? "";

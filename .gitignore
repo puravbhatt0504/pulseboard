@@ -8,3 +8,4 @@ coverage/
 .pgdata-e2e/
 test-results/
 playwright-report/
+cdk.out/

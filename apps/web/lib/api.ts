@@ -1,4 +1,6 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+// Separate from API_URL: socket.io would read a path like "/api" as a namespace. Prod: "/" (same origin).
+export const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL ?? API_URL;
 
 // Access token lives in memory only; the refresh token is an httpOnly cookie the browser holds.
 let accessToken: string | null = null;
