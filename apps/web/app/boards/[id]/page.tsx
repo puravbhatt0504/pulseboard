@@ -235,7 +235,7 @@ export default function BoardPage() {
           </button>
           {exportJob &&
             (exportJob.url ? (
-              <a href={exportJob.url} className="text-blue-700 underline" data-testid="export-link">
+              <a href={exportJob.url} download={`board-${boardId}`} className="text-blue-700 underline" data-testid="export-link">
                 Download export
               </a>
             ) : (

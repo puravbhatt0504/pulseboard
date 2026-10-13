@@ -182,6 +182,13 @@ describe("RelayQ round trip", () => {
     expect((await status()).body.status).toBe("ready");
   });
 
+  it("callback accepts an inline data: export larger than express's 100kb default", async () => {
+    const jobId = await startExport();
+    const body = { jobId, url: `data:application/json;base64,${Buffer.alloc(300_000, "a").toString("base64")}` };
+    expect((await callback(body, sign(JSON.stringify(body)))).status).toBe(204);
+    expect((await request(app).get(`/boards/${boardId}/exports/${jobId}`).set("Authorization", editor.auth)).body.url).toBe(body.url);
+  });
+
   it("callback with a missing, wrong-secret or tampered signature → 401 and no change", async () => {
     const jobId = await startExport();
     const body = { jobId, url: "https://evil.example/x" };
