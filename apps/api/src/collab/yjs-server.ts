@@ -27,7 +27,7 @@ const b64 = (u: Uint8Array) => Buffer.from(u).toString("base64");
  * list and published on a Redis channel so other instances' in-memory copies stay current. An instance opening a
  * doc applies Postgres state + that list, so it also has edits other instances haven't persisted yet. Applying a
  * Yjs update twice is a no-op, which is why the list needs no precise trimming, only a TTL.
- * Viewers can join and read; their updates are dropped. Persistence: debounced merge-write to CardDoc, and
+ * Viewers can join and read; their updates are dropped. Awareness (carets) is relayed, not stored. Persistence: debounced merge-write to CardDoc, and
  * immediately when an instance's last socket on the card leaves (then the doc is unloaded there).
  */
 export function attachCollab(io: IO, deps: Omit<Deps, "io">) {
@@ -128,6 +128,14 @@ export function attachCollab(io: IO, deps: Omit<Deps, "io">) {
       await redis.multi().rpush(logKey(cardId), enc).expire(logKey(cardId), UPDATE_LOG_TTL_S).exec();
       await redis.publish(channel(cardId), JSON.stringify({ from: instance, update: enc }));
       schedule(cardId, d);
+    });
+
+    // Carets and names: relayed as-is to the card's room, never stored. Viewers have carets too.
+    socket.on("doc:awareness", (p) => {
+      const cardId = typeof p?.cardId === "string" ? p.cardId : "";
+      if (socket.data.cards?.has(cardId) && bytes(p.update) && p.update.length <= 4096) {
+        socket.to(cardRoom(cardId)).emit("doc:awareness", { cardId, update: p.update });
+      }
     });
 
     socket.on("doc:leave", (p) => {

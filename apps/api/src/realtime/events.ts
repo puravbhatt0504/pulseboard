@@ -15,6 +15,7 @@ export interface ServerToClient {
   "export:ready": (p: { jobId: string; url: string }) => void;
   error: (p: { code: "forbidden" | "bad_request" }) => void;
   "doc:update": (p: { cardId: string; update: Uint8Array }) => void;
+  "doc:awareness": (p: { cardId: string; update: Uint8Array }) => void; // y-protocols awareness (editor carets)
 }
 
 export type DocJoinAck = { update: Uint8Array; sv: Uint8Array; readOnly: boolean } | { error: "forbidden" | "bad_request" };
@@ -24,6 +25,7 @@ export interface ClientToServer {
   cursor: (p: { x: number; y: number }) => void;
   "doc:join": (p: { cardId: string; sv?: Uint8Array }, ack: (r: DocJoinAck) => void) => void;
   "doc:update": (p: { cardId: string; update: Uint8Array }) => void;
+  "doc:awareness": (p: { cardId: string; update: Uint8Array }) => void;
   "doc:leave": (p: { cardId: string }) => void;
 }
 

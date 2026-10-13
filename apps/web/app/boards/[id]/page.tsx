@@ -16,6 +16,7 @@ import {
 } from "@dnd-kit/core";
 import { api, ApiError, getToken, refresh, SOCKET_URL } from "@/lib/api";
 import { CardDescription } from "@/components/CardDescription";
+import { isTmp, replay, tmpId, write } from "@/lib/outbox";
 
 type Card = { id: string; columnId: string; title: string; position: string };
 type Column = { id: string; title: string; cards: Card[] };
@@ -76,6 +77,7 @@ export default function BoardPage() {
   const socketRef = useRef<Socket | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [me, setMe] = useState("");
   const areaRef = useRef<HTMLDivElement>(null);
   const lastCursor = useRef(0);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -92,7 +94,14 @@ export default function BoardPage() {
         socket = io(SOCKET_URL, { auth: (cb) => cb({ token: getToken() }), transports: ["websocket"] });
         socketRef.current = socket;
         setSocket(socket);
-        socket.on("connect", () => socket!.emit("join_board", { boardId }));
+        // Every (re)connect: send writes queued offline, then refetch if anything changed or events were missed.
+        let reconnect = false;
+        socket.on("connect", async () => {
+          socket!.emit("join_board", { boardId });
+          const sent = await replay((op, e) => setError(`A change made offline was dropped (${e.status} ${e.message}): ${op.method} ${op.path}`));
+          if (sent || reconnect) setBoard(await api<Board>(`/boards/${boardId}`));
+          reconnect = true;
+        });
         socket.on("connect_error", async (err) => {
           if (err.message === "unauthorized" && (await refresh())) socket!.connect();
         });
@@ -110,6 +119,7 @@ export default function BoardPage() {
         });
         // Batches include our own cursor; the access token's `sub` is our user id.
         const me = JSON.parse(atob(getToken()!.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).sub;
+        setMe(me);
         socket.on("cursors", ({ cursors: batch }: { cursors: { userId: string; x: number; y: number }[] }) =>
           setCursors((prev) => {
             const next = { ...prev };
@@ -162,11 +172,12 @@ export default function BoardPage() {
     setBoard(placeCard(board, cardId, columnId, beforeCardId));
     try {
       // API: `after` = the card that ends up directly below the moved one; omitted = append.
-      const card = await api<Card>(`/cards/${cardId}`, {
+      const card = await write<Card>({
+        path: `/cards/${cardId}`,
         method: "PATCH",
         body: beforeCardId ? { columnId, after: beforeCardId } : { columnId },
       });
-      setBoard((prev) => prev && upsertCard(prev, card));
+      if (card) setBoard((prev) => prev && upsertCard(prev, card)); // null: queued, the optimistic placement stays
     } catch (e) {
       setBoard(snapshot);
       setError(`Move failed: ${(e as Error).message}`);
@@ -178,7 +189,8 @@ export default function BoardPage() {
     const form = e.currentTarget;
     const title = new FormData(form).get("title");
     try {
-      const col = await api<Column>(`/boards/${boardId}/columns`, { method: "POST", body: { title } });
+      const id = tmpId();
+      const col = (await write<Column>({ path: `/boards/${boardId}/columns`, method: "POST", body: { title }, tmpId: id })) ?? { id, title: String(title), cards: [] };
       setBoard((prev) => prev && { ...prev, columns: [...prev.columns, { ...col, cards: [] }] });
       form.reset();
     } catch (err) {
@@ -191,7 +203,9 @@ export default function BoardPage() {
     const form = e.currentTarget;
     const title = new FormData(form).get("title");
     try {
-      const card = await api<Card>(`/columns/${columnId}/cards`, { method: "POST", body: { title } });
+      const id = tmpId();
+      // Offline: shown last in the column ("~" sorts after any real position) until replay + refetch.
+      const card = (await write<Card>({ path: `/columns/${columnId}/cards`, method: "POST", body: { title }, tmpId: id })) ?? { id, columnId, title: String(title), position: "~" };
       setBoard((prev) => prev && upsertCard(prev, card));
       form.reset();
     } catch (err) {
@@ -224,6 +238,7 @@ export default function BoardPage() {
   }
 
   const openCard = board?.columns.flatMap((c) => c.cards).find((c) => c.id === openCardId);
+  const meUser = users.find((u) => u.id === me) ?? { name: "you", color: "#71717a" };
 
   if (status === "loading") return <p className="p-8 text-zinc-500">Loading…</p>;
   if (status === "missing" || !board) return <p className="p-8">Board not found.</p>;
@@ -280,7 +295,7 @@ export default function BoardPage() {
         <DndContext sensors={sensors} collisionDetection={collision} onDragEnd={onDragEnd}>
           <div className="flex items-start gap-4">
             {board.columns.map((col) => (
-              <ColumnView key={col.id} column={col} onAddCard={addCard} onOpen={setOpenCardId} />
+              <ColumnView key={col.id} column={col} onAddCard={addCard} onOpen={(id) => !isTmp(id) && setOpenCardId(id)} />
             ))}
             <form onSubmit={addColumn} className="w-64 shrink-0">
               <input name="title" required maxLength={200} placeholder="+ Add column" className="w-full rounded border border-dashed border-zinc-300 bg-transparent px-3 py-2" />
@@ -295,7 +310,7 @@ export default function BoardPage() {
                 ✕
               </button>
             </div>
-            <CardDescription key={openCard.id} socket={socket} cardId={openCard.id} />
+            <CardDescription key={openCard.id} socket={socket} cardId={openCard.id} user={meUser} />
           </aside>
         )}
         {Object.entries(cursors).map(([userId, pos]) => {

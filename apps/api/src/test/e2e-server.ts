@@ -10,6 +10,8 @@ import { createServer } from "../app.js";
 
 process.env.JWT_ACCESS_SECRET ??= "e2e-access";
 process.env.JWT_REFRESH_SECRET ??= "e2e-refresh";
+// Each Playwright context sends its own X-Forwarded-For, so the per-IP login limit isn't shared by every test.
+process.env.TRUST_PROXY_HOPS ??= "1";
 
 const databaseDir = ".pgdata-e2e";
 rmSync(databaseDir, { recursive: true, force: true });

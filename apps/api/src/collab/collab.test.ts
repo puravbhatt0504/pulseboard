@@ -161,6 +161,17 @@ describe("collaborative card description", () => {
     a.close();
   });
 
+  it("awareness (carets) reaches the other instance's clients, including from a viewer, and only for joined cards", async () => {
+    const cardId = await newCard();
+    const a = await syncClient(s1, ids.owner, cardId);
+    const v = await syncClient(s2, ids.viewer, cardId);
+    const got = new Promise((r) => a.socket.once("doc:awareness", r));
+    v.socket.emit("doc:awareness", { cardId: "not-joined", update: new Uint8Array([9]) });
+    v.socket.emit("doc:awareness", { cardId, update: new Uint8Array([1, 2, 3]) });
+    expect(await got).toEqual({ cardId, update: Buffer.from([1, 2, 3]) });
+    [a, v].forEach((c) => c.close());
+  });
+
   it("a non-member cannot join", async () => {
     const stranger = await d1.prisma.user.create({ data: { email: uniqueEmail(), passwordHash: "x" } });
     await expect(syncClient(s1, stranger.id, await newCard())).rejects.toThrow("forbidden");

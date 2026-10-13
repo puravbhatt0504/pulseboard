@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { column, signUp } from "./helpers";
+import { column, newContext, sharedBoard, signUp } from "./helpers";
 
 test("A drags a card and B sees it move and sees A's cursor, without reload", async ({ browser }) => {
-  const a = await (await browser.newContext()).newPage();
-  const b = await (await browser.newContext()).newPage();
-  const stamp = Date.now();
+  const a = await (await newContext(browser)).newPage();
+  const b = await (await newContext(browser)).newPage();
+  const stamp = `${Date.now()}${Math.random().toString(36).slice(2, 6)}`; // parallel workers can share a millisecond
   const emailA = `alice${stamp}@e2e.dev`;
   const emailB = `bob${stamp}@e2e.dev`;
   await signUp(a, emailA);
@@ -54,4 +54,22 @@ test("A drags a card and B sees it move and sees A's cursor, without reload", as
   const cursor = b.locator('[data-testid^="cursor-"]');
   await expect(cursor).toBeVisible();
   await expect(cursor).toContainText(`alice${stamp}`);
+});
+
+test("in a card description, A sees B's caret with B's name, and it goes when B closes the card", async ({ browser }) => {
+  const { a, b, stamp } = await sharedBoard(browser, "Carets", ["Todo"]);
+  await column(a, "Todo").getByPlaceholder("+ Add card").fill("Spec");
+  await column(a, "Todo").getByPlaceholder("+ Add card").press("Enter");
+  await b.goto(a.url());
+  for (const p of [a, b]) {
+    await column(p, "Todo").getByTestId("card").click();
+    await expect(p.getByTestId("description-status")).toHaveText("live");
+  }
+  await b.getByTestId("description-editor").click();
+  await b.keyboard.type("hi");
+  const caret = a.getByTestId("description-editor").locator(".collaboration-carets__label");
+  await expect(caret).toBeVisible();
+  await expect(caret).toContainText(new RegExp(`bob${stamp}`, "i"));
+  await b.getByRole("button", { name: "Close card" }).click();
+  await expect(caret).toHaveCount(0);
 });
