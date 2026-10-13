@@ -38,4 +38,14 @@ Synthetic data (assumptions in `ml/eta/eta/simulate.py`), time split (train on t
 | XGBoost (p50 quantile) | **16.70 h** |
 
 The p90 prediction covers 91.8% of test cards.
+
+**Real data** (2026-10-13): 1,214 settled GitHub issues from facebook/react and vercel/next.js (`python -m eta.github_import`; opened ≥ 60 days ago, completion time capped at 60 days, a third hit the cap). Same time split:
+
+| Model | test MAE |
+|---|---:|
+| median per board (baseline) | 501 h |
+| linear regression | 601 h |
+| XGBoost (p50 quantile) | **380 h** |
+
+The p90 prediction covers 87% of test issues. Errors are large because the data has two humps: the typical issue closes in about 5 h, while a third of them run past 60 days.
 Serve: `docker compose --profile ml up eta` (port 8000; reads `ml/eta/models`). In RelayQ set `TRAINER_MODEL_DIR=<this repo>/ml/eta/models` and `MODEL_SUBSCRIBERS_ETA=http://localhost:8000/reload`.
