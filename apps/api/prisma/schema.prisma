@@ -42,6 +42,7 @@ model Board {
   members    BoardMember[]
   columns    Column[]
   activities Activity[]
+  exports    Export[]
 }
 
 model BoardMember {
@@ -90,4 +91,19 @@ model Activity {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+// One row per RelayQ board.export job; RelayQ's signed callback fills in the download url.
+model Export {
+  jobId       String   @id
+  boardId     String
+  requestedBy String
+  format      String
+  status      String   @default("queued")
+  url         String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  board       Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@index([boardId])
 }

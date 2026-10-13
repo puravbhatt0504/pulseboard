@@ -4,7 +4,8 @@ import { requireAuth } from "../auth/middleware.js";
 import { h, HttpError, requireString } from "../http.js";
 import { between } from "../cards/position.js";
 import { getBoard, invalidateBoard, requireRole } from "./service.js";
-import { enqueue } from "../jobs/relayq.js";
+import { enqueue, isRelayqService, verifyRelayqSignature } from "../jobs/relayq.js";
+import { room } from "../realtime/events.js";
 
 export function boardsRouter(deps: Deps) {
   const { prisma } = deps;
@@ -28,10 +29,21 @@ export function boardsRouter(deps: Deps) {
     res.status(201).json({ ...board, role: "owner" });
   }));
 
-  r.get("/boards/:id", requireAuth, h(async (req, res) => {
-    await requireRole(deps, req.params.id, req.userId, false);
-    res.json(await getBoard(deps, req.params.id));
-  }));
+  r.get(
+    "/boards/:id",
+    // RelayQ's export worker reads boards with a service token instead of a user JWT.
+    h(async (req, res, next) => {
+      if (!isRelayqService(req.headers.authorization)) return next();
+      const board = await getBoard(deps, req.params.id);
+      if (!board) throw new HttpError(404, "board not found");
+      res.json(board);
+    }),
+    requireAuth,
+    h(async (req, res) => {
+      await requireRole(deps, req.params.id, req.userId, false);
+      res.json(await getBoard(deps, req.params.id));
+    }),
+  );
 
   r.post("/boards/:id/columns", requireAuth, h(async (req, res) => {
     const boardId = req.params.id;
@@ -69,7 +81,28 @@ export function boardsRouter(deps: Deps) {
     const format = req.body?.format ?? "json";
     if (format !== "json" && format !== "csv") throw new HttpError(400, "format must be json or csv");
     const callbackUrl = `${process.env.PUBLIC_API_URL ?? "http://localhost:4000"}/boards/${boardId}/export/callback`;
-    res.status(202).json(await enqueue("board.export", { boardId, format, callbackUrl }));
+    const { jobId } = await enqueue("board.export", { boardId, format, callbackUrl });
+    await prisma.export.create({ data: { jobId, boardId, requestedBy: req.userId, format } });
+    res.status(202).json({ jobId });
+  }));
+
+  // Called by RelayQ (no user session): trust comes only from the HMAC signature. RelayQ retries until 2xx,
+  // so a repeat delivery must succeed without changing anything.
+  r.post("/boards/:id/export/callback", h(async (req, res) => {
+    if (!verifyRelayqSignature(req.rawBody, req.headers["x-relayq-signature"])) throw new HttpError(401, "bad signature");
+    const { jobId, url } = req.body ?? {};
+    if (typeof jobId !== "string" || typeof url !== "string") throw new HttpError(400, "jobId and url required");
+    const updated = await prisma.export.updateMany({ where: { jobId, boardId: req.params.id }, data: { status: "ready", url } });
+    if (updated.count === 0) throw new HttpError(404, "export not found");
+    deps.io?.to(room(req.params.id)).emit("export:ready", { jobId, url });
+    res.status(204).end();
+  }));
+
+  r.get("/boards/:id/exports/:jobId", requireAuth, h(async (req, res) => {
+    await requireRole(deps, req.params.id, req.userId, false);
+    const exp = await prisma.export.findFirst({ where: { jobId: req.params.jobId, boardId: req.params.id } });
+    if (!exp) throw new HttpError(404, "export not found");
+    res.json({ jobId: exp.jobId, format: exp.format, status: exp.status, url: exp.url });
   }));
 
   return r;

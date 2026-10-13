@@ -5,6 +5,7 @@ declare global {
   namespace Express {
     interface Request {
       userId: string;
+      rawBody?: Buffer; // exact bytes of a JSON body, for HMAC verification
     }
   }
 }

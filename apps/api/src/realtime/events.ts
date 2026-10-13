@@ -12,6 +12,7 @@ export interface ServerToClient {
   "card:deleted": (p: CardEvent) => void;
   "presence:update": (p: { users: PresenceUser[] }) => void;
   cursor: (p: { userId: string; x: number; y: number }) => void;
+  "export:ready": (p: { jobId: string; url: string }) => void;
   error: (p: { code: "forbidden" | "bad_request" }) => void;
 }
 

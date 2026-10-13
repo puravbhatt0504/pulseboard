@@ -5,12 +5,14 @@ import request from "supertest";
 import { makeTestApp, uniqueEmail } from "../test/harness.js";
 import { signAccess } from "../auth/jwt.js";
 import { enqueueDigests } from "./digest.js";
+import { createHmac } from "node:crypto";
 
 const { app, prisma } = makeTestApp();
 
 // Fake RelayQ: records every request, answers 202 {jobId}.
 type Captured = { auth?: string; body: any };
 let captured: Captured[] = [];
+let jobSeq = 0; // job ids are Export primary keys, so they must stay unique across tests
 let relayq: Server;
 const readBody = (req: IncomingMessage) =>
   new Promise<string>((resolve) => {
@@ -26,7 +28,7 @@ let cardId: string;
 beforeAll(async () => {
   relayq = createServer(async (req, res) => {
     captured.push({ auth: req.headers.authorization, body: JSON.parse(await readBody(req)) });
-    res.writeHead(202, { "content-type": "application/json" }).end(JSON.stringify({ jobId: `job-${captured.length}`, status: "queued" }));
+    res.writeHead(202, { "content-type": "application/json" }).end(JSON.stringify({ jobId: `job-${++jobSeq}`, status: "queued" }));
   });
   await new Promise<void>((r) => relayq.listen(0, r));
 
@@ -59,7 +61,7 @@ describe("POST /boards/:id/export", () => {
   it("enqueues board.export with the RelayQ payload shape → 202 {jobId}", async () => {
     const res = await request(app).post(`/boards/${boardId}/export`).set("Authorization", owner.auth).send({ format: "csv" });
     expect(res.status).toBe(202);
-    expect(res.body).toEqual({ jobId: "job-1" });
+    expect(res.body).toEqual({ jobId: expect.stringMatching(/^job-\d+$/) });
     expect(captured).toEqual([
       {
         auth: "Bearer rq_test",
@@ -132,5 +134,73 @@ describe("nightly digest", () => {
     // The owner did the only activity on this board, so gets no digest about it.
     expect(captured.find((c) => c.body.payload.to === owner.email)).toBeUndefined();
     expect(jobs.length).toBe(captured.length);
+  });
+});
+
+describe("RelayQ round trip", () => {
+  const SERVICE_TOKEN = "svc-token-for-tests";
+  const WEBHOOK_SECRET = "whsec-for-tests";
+  // Byte-for-byte RelayQ's sign(): hex HMAC-SHA256 of the raw JSON body.
+  const sign = (raw: string, secret = WEBHOOK_SECRET) => createHmac("sha256", secret).update(raw).digest("hex");
+  const callback = (body: object, signature?: string) => {
+    const raw = JSON.stringify(body);
+    const req = request(app).post(`/boards/${boardId}/export/callback`).set("content-type", "application/json");
+    if (signature !== undefined) req.set("x-relayq-signature", signature);
+    return req.send(raw);
+  };
+  const startExport = async () =>
+    (await request(app).post(`/boards/${boardId}/export`).set("Authorization", owner.auth).send({ format: "json" })).body.jobId as string;
+
+  beforeEach(() => {
+    process.env.RELAYQ_SERVICE_TOKEN = SERVICE_TOKEN;
+    process.env.RELAYQ_WEBHOOK_SECRET = WEBHOOK_SECRET;
+  });
+
+  it("RelayQ's service token reads any board; a wrong token is 401", async () => {
+    const ok = await request(app).get(`/boards/${boardId}`).set("Authorization", `Bearer ${SERVICE_TOKEN}`);
+    expect(ok.status).toBe(200);
+    expect(ok.body).toMatchObject({ id: boardId, title: "Jobs", columns: [{ title: "c", cards: [{ id: cardId, title: "card" }] }] });
+    expect((await request(app).get(`/boards/${boardId}`).set("Authorization", "Bearer nope")).status).toBe(401);
+    expect((await request(app).get("/boards/missing").set("Authorization", `Bearer ${SERVICE_TOKEN}`)).status).toBe(404);
+  });
+
+  it("service token is rejected when RELAYQ_SERVICE_TOKEN is unset", async () => {
+    delete process.env.RELAYQ_SERVICE_TOKEN;
+    expect((await request(app).get(`/boards/${boardId}`).set("Authorization", `Bearer ${SERVICE_TOKEN}`)).status).toBe(401);
+  });
+
+  it("export is queued, then a signed callback marks it ready; a repeat delivery is a no-op 204", async () => {
+    const jobId = await startExport();
+    const status = () => request(app).get(`/boards/${boardId}/exports/${jobId}`).set("Authorization", editor.auth);
+    expect((await status()).body).toEqual({ jobId, format: "json", status: "queued", url: null });
+
+    const body = { jobId, url: "https://bucket.s3.amazonaws.com/exports/x.json?sig=1" };
+    expect((await callback(body, sign(JSON.stringify(body)))).status).toBe(204);
+    expect((await status()).body).toEqual({ jobId, format: "json", status: "ready", url: body.url });
+
+    expect((await callback(body, sign(JSON.stringify(body)))).status).toBe(204);
+    expect((await status()).body.status).toBe("ready");
+  });
+
+  it("callback with a missing, wrong-secret or tampered signature → 401 and no change", async () => {
+    const jobId = await startExport();
+    const body = { jobId, url: "https://evil.example/x" };
+    expect((await callback(body)).status).toBe(401);
+    expect((await callback(body, sign(JSON.stringify(body), "other-secret"))).status).toBe(401);
+    expect((await callback(body, sign(JSON.stringify({ ...body, url: "https://ok.example" })))).status).toBe(401);
+    const exp = await prisma.export.findUnique({ where: { jobId } });
+    expect(exp).toMatchObject({ status: "queued", url: null });
+  });
+
+  it("callback for an unknown job → 404", async () => {
+    const body = { jobId: "job-does-not-exist", url: "https://x.example" };
+    expect((await callback(body, sign(JSON.stringify(body)))).status).toBe(404);
+  });
+
+  it("export status is members-only", async () => {
+    const jobId = await startExport();
+    const stranger = await prisma.user.create({ data: { email: uniqueEmail(), passwordHash: "x" } });
+    const res = await request(app).get(`/boards/${boardId}/exports/${jobId}`).set("Authorization", `Bearer ${signAccess({ userId: stranger.id })}`);
+    expect(res.status).toBe(404);
   });
 });

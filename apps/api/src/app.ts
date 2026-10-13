@@ -28,7 +28,8 @@ export function createApp(deps: Deps) {
     if (req.method === "OPTIONS") return void res.status(204).end();
     next();
   });
-  app.use(express.json(), cookieParser());
+  // Keep the raw bytes: RelayQ signs the exact body, and re-serialised JSON wouldn't match.
+  app.use(express.json({ verify: (req, _res, buf) => void ((req as express.Request).rawBody = buf) }), cookieParser());
   // Prod serves web and API on one CloudFront host, so the API lives under /api there; "" locally.
   const api = Router();
   api.get("/health", h(async (_req, res) => {

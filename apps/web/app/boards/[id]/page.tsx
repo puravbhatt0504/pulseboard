@@ -70,6 +70,8 @@ export default function BoardPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [cursors, setCursors] = useState<Record<string, { x: number; y: number }>>({});
   const [error, setError] = useState("");
+  // Board export via RelayQ: the job we started, then its download url from the export:ready socket event.
+  const [exportJob, setExportJob] = useState<{ jobId: string; url?: string } | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const lastCursor = useRef(0);
@@ -93,6 +95,10 @@ export default function BoardPage() {
         for (const evt of ["card:created", "card:updated", "card:moved"] as const) {
           socket.on(evt, ({ card }: { card: Card }) => setBoard((prev) => prev && upsertCard(prev, card)));
         }
+        // Every member hears export:ready; only the job this tab started is shown.
+        socket.on("export:ready", ({ jobId, url }: { jobId: string; url: string }) =>
+          setExportJob((job) => (job?.jobId === jobId ? { jobId, url } : job)),
+        );
         socket.on("presence:update", ({ users }: { users: User[] }) => {
           setUsers(users);
           const present = new Set(users.map((u) => u.id));
@@ -175,6 +181,17 @@ export default function BoardPage() {
     }
   }
 
+  async function startExport(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const format = new FormData(e.currentTarget).get("format");
+    try {
+      const { jobId } = await api<{ jobId: string }>(`/boards/${boardId}/export`, { method: "POST", body: { format } });
+      setExportJob({ jobId });
+    } catch (err) {
+      setError(`Export failed: ${(err as Error).message}`);
+    }
+  }
+
   async function invite(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
@@ -208,7 +225,24 @@ export default function BoardPage() {
             </span>
           ))}
         </div>
-        <form onSubmit={invite} className="ml-auto flex gap-2 text-sm">
+        <form onSubmit={startExport} className="ml-auto flex items-center gap-2 text-sm">
+          <select name="format" aria-label="Export format" className="rounded border border-zinc-300 px-2 py-1" defaultValue="csv">
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+          </select>
+          <button disabled={!!exportJob && !exportJob.url} className="rounded border border-zinc-300 px-3 py-1 disabled:opacity-50">
+            Export
+          </button>
+          {exportJob &&
+            (exportJob.url ? (
+              <a href={exportJob.url} className="text-blue-700 underline" data-testid="export-link">
+                Download export
+              </a>
+            ) : (
+              <span className="text-zinc-500">Exporting…</span>
+            ))}
+        </form>
+        <form onSubmit={invite} className="flex gap-2 text-sm">
           <input name="email" type="email" required placeholder="Invite by email" className="rounded border border-zinc-300 px-2 py-1" />
           <select name="role" className="rounded border border-zinc-300 px-2 py-1" defaultValue="editor">
             <option value="editor">editor</option>

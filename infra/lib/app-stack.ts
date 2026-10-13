@@ -11,6 +11,9 @@ import type { DataStack } from "./data-stack.js";
 
 type Props = StackProps & { data: DataStack; imageTag: string };
 
+// RelayQ's always-on HTTPS deployment (its AWS stack is HTTP-only and time-boxed).
+const RELAYQ_URL = "https://relayq-demo.onrender.com";
+
 // Stateless compute: ALB + Fargate services + CloudFront. Redeployed by CI on every push to main.
 export class AppStack extends Stack {
   constructor(scope: Construct, id: string, { data, imageTag, ...props }: Props) {
@@ -60,7 +63,7 @@ export class AppStack extends Stack {
       secrets: dbSecrets,
       logging: logDriver("migrate"),
     });
-    const jwt = (name: string) =>
+    const ssmSecret = (name: string) =>
       ecs.Secret.fromSsmParameter(
         ssm.StringParameter.fromSecureStringParameterAttributes(this, name, { parameterName: `/pulseboard/${name}` }),
       );
@@ -77,12 +80,17 @@ export class AppStack extends Stack {
         PUBLIC_API_URL: `${publicUrl}/api`,
         REDIS_URL: `redis://${data.redisHost}:${data.redisPort}`,
         S3_BUCKET: data.bucket.bucketName,
+        RELAYQ_URL,
         AWS_REGION: this.region,
       },
       secrets: {
         ...dbSecrets,
-        JWT_ACCESS_SECRET: jwt("jwt-access-secret"),
-        JWT_REFRESH_SECRET: jwt("jwt-refresh-secret"),
+        JWT_ACCESS_SECRET: ssmSecret("jwt-access-secret"),
+        JWT_REFRESH_SECRET: ssmSecret("jwt-refresh-secret"),
+        // RelayQ: our tenant key, the token RelayQ uses to read boards, and its callback signing secret.
+        RELAYQ_API_KEY: ssmSecret("relayq-api-key"),
+        RELAYQ_SERVICE_TOKEN: ssmSecret("relayq-service-token"),
+        RELAYQ_WEBHOOK_SECRET: ssmSecret("relayq-webhook-secret"),
       },
       logging: logDriver("api"),
     });
