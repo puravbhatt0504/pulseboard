@@ -1,16 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-
-const PASSWORD = "password123";
-
-async function signUp(page: Page, email: string) {
-  await page.goto("/register");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(PASSWORD);
-  await page.getByRole("button", { name: "Create account" }).click();
-  await page.waitForURL("**/boards");
-}
-
-const column = (page: Page, title: string) => page.getByTestId("column").filter({ has: page.getByRole("heading", { name: title }) });
+import { expect, test } from "@playwright/test";
+import { column, signUp } from "./helpers";
 
 test("A drags a card and B sees it move and sees A's cursor, without reload", async ({ browser }) => {
   const a = await (await browser.newContext()).newPage();

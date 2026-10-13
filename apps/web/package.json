@@ -19,9 +19,16 @@
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
+    "@tiptap/extension-collaboration": "^3.32.0",
+    "@tiptap/pm": "^3.32.0",
+    "@tiptap/react": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
+    "@tiptap/y-tiptap": "^3.0.10",
     "next": "^16.4.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "socket.io-client": "^4.8.4"
+    "socket.io-client": "^4.8.4",
+    "y-indexeddb": "^9.0.12",
+    "yjs": "^13.6.33"
   }
 }

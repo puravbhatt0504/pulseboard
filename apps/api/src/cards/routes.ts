@@ -26,6 +26,11 @@ export function cardsRouter(deps: Deps) {
 
   r.patch("/cards/:id", requireAuth, h(async (req, res) => {
     const b = req.body ?? {};
+    // Once a card has a collaborative doc, its description is the doc's projection; a REST write would be lost
+    // on the next persist, so refuse it.
+    if (b.description !== undefined && (await deps.prisma.cardDoc.findUnique({ where: { cardId: req.params.id }, select: { cardId: true } }))) {
+      throw new HttpError(409, "description is collaborative: edit it through the card doc");
+    }
     const { card, boardId, moved } = await updateCard(deps, req.userId, req.params.id, {
       title: optional(b.title, "title", 200),
       description: description(b.description),

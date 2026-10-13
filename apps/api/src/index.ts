@@ -14,4 +14,7 @@ const redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379");
 redis.on("error", (err) => console.error("redis:", err.message));
 const port = Number(process.env.PORT ?? 4000);
 
-createServer({ prisma, redis }).server.listen(port, () => console.log(`api on :${port}`));
+const { server, collab } = createServer({ prisma, redis });
+server.listen(port, () => console.log(`api on :${port}`));
+// Deploys send SIGTERM: write open card docs before exiting (clients would resync them anyway on reconnect).
+process.once("SIGTERM", () => void collab.flush().finally(() => process.exit(0)));

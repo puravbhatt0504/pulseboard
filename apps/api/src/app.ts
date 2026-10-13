@@ -8,6 +8,7 @@ import { authRouter } from "./auth/routes.js";
 import { boardsRouter } from "./boards/routes.js";
 import { cardsRouter } from "./cards/routes.js";
 import { attachRealtime } from "./realtime/socket.js";
+import { attachCollab } from "./collab/yjs-server.js";
 import type { IO } from "./realtime/events.js";
 
 export type Deps = { prisma: PrismaClient; redis: Redis; io?: IO };
@@ -65,6 +66,7 @@ export function createServer(deps: Omit<Deps, "io">) {
   const withIo: Deps = { ...deps };
   const server = createHttpServer(createApp(withIo));
   const io = attachRealtime(server, deps);
+  const collab = attachCollab(io, deps);
   withIo.io = io;
-  return { server, io };
+  return { server, io, collab };
 }

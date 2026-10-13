@@ -15,6 +15,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { api, ApiError, getToken, refresh, SOCKET_URL } from "@/lib/api";
+import { CardDescription } from "@/components/CardDescription";
 
 type Card = { id: string; columnId: string; title: string; position: string };
 type Column = { id: string; title: string; cards: Card[] };
@@ -73,6 +74,8 @@ export default function BoardPage() {
   // Board export via RelayQ: the job we started, then its download url from the export:ready socket event.
   const [exportJob, setExportJob] = useState<{ jobId: string; url?: string } | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [openCardId, setOpenCardId] = useState<string | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const lastCursor = useRef(0);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -88,6 +91,7 @@ export default function BoardPage() {
         // Connect only once the token exists (the board fetch may have just refreshed it).
         socket = io(SOCKET_URL, { auth: (cb) => cb({ token: getToken() }), transports: ["websocket"] });
         socketRef.current = socket;
+        setSocket(socket);
         socket.on("connect", () => socket!.emit("join_board", { boardId }));
         socket.on("connect_error", async (err) => {
           if (err.message === "unauthorized" && (await refresh())) socket!.connect();
@@ -119,8 +123,16 @@ export default function BoardPage() {
         if (e instanceof ApiError && e.status === 401) router.replace("/login");
         else setStatus("missing");
       });
+    // Going offline drops the socket at once (instead of waiting for ping timeouts), so edits are clearly local
+    // until it reconnects and the card doc resyncs.
+    const offline = () => socket?.disconnect();
+    const online = () => socket?.connect();
+    window.addEventListener("offline", offline);
+    window.addEventListener("online", online);
     return () => {
       cancelled = true;
+      window.removeEventListener("offline", offline);
+      window.removeEventListener("online", online);
       socket?.close();
     };
   }, [boardId, router]);
@@ -211,6 +223,8 @@ export default function BoardPage() {
     }
   }
 
+  const openCard = board?.columns.flatMap((c) => c.cards).find((c) => c.id === openCardId);
+
   if (status === "loading") return <p className="p-8 text-zinc-500">Loading…</p>;
   if (status === "missing" || !board) return <p className="p-8">Board not found.</p>;
 
@@ -266,13 +280,24 @@ export default function BoardPage() {
         <DndContext sensors={sensors} collisionDetection={collision} onDragEnd={onDragEnd}>
           <div className="flex items-start gap-4">
             {board.columns.map((col) => (
-              <ColumnView key={col.id} column={col} onAddCard={addCard} />
+              <ColumnView key={col.id} column={col} onAddCard={addCard} onOpen={setOpenCardId} />
             ))}
             <form onSubmit={addColumn} className="w-64 shrink-0">
               <input name="title" required maxLength={200} placeholder="+ Add column" className="w-full rounded border border-dashed border-zinc-300 bg-transparent px-3 py-2" />
             </form>
           </div>
         </DndContext>
+        {openCard && socket && (
+          <aside role="dialog" aria-label="Card" className="fixed inset-y-0 right-0 z-40 w-full max-w-md overflow-y-auto border-l border-zinc-200 bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <h2 className="text-lg font-semibold">{openCard.title}</h2>
+              <button onClick={() => setOpenCardId(null)} aria-label="Close card" className="text-zinc-500 hover:text-zinc-900">
+                ✕
+              </button>
+            </div>
+            <CardDescription key={openCard.id} socket={socket} cardId={openCard.id} />
+          </aside>
+        )}
         {Object.entries(cursors).map(([userId, pos]) => {
           const user = users.find((u) => u.id === userId);
           return (
@@ -296,7 +321,15 @@ export default function BoardPage() {
   );
 }
 
-function ColumnView({ column, onAddCard }: { column: Column; onAddCard: (e: React.FormEvent<HTMLFormElement>, columnId: string) => void }) {
+function ColumnView({
+  column,
+  onAddCard,
+  onOpen,
+}: {
+  column: Column;
+  onAddCard: (e: React.FormEvent<HTMLFormElement>, columnId: string) => void;
+  onOpen: (cardId: string) => void;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${column.id}` });
   return (
     <section
@@ -308,7 +341,7 @@ function ColumnView({ column, onAddCard }: { column: Column; onAddCard: (e: Reac
       <h2 className="mb-3 font-medium">{column.title}</h2>
       <ul className="min-h-8 space-y-2">
         {column.cards.map((card) => (
-          <CardView key={card.id} card={card} />
+          <CardView key={card.id} card={card} onOpen={onOpen} />
         ))}
       </ul>
       <form onSubmit={(e) => onAddCard(e, column.id)} className="mt-3">
@@ -318,7 +351,7 @@ function ColumnView({ column, onAddCard }: { column: Column; onAddCard: (e: Reac
   );
 }
 
-function CardView({ card }: { card: Card }) {
+function CardView({ card, onOpen }: { card: Card; onOpen: (cardId: string) => void }) {
   const drag = useDraggable({ id: card.id });
   const drop = useDroppable({ id: `card:${card.id}` });
   const style = drag.transform ? { transform: `translate(${drag.transform.x}px, ${drag.transform.y}px)` } : undefined;
@@ -331,6 +364,7 @@ function CardView({ card }: { card: Card }) {
       {...drag.listeners}
       {...drag.attributes}
       style={style}
+      onClick={() => onOpen(card.id)} // a drag needs 5 px of movement, so a click never starts one
       data-testid="card"
       className={`cursor-grab rounded border bg-white px-3 py-2 text-sm shadow-sm ${drag.isDragging ? "relative z-10 opacity-80" : ""} ${
         drop.isOver && !drag.isDragging ? "border-t-4 border-t-zinc-900" : "border-zinc-200"
