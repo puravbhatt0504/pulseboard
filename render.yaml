@@ -13,8 +13,11 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      # Render allows one free Key Value per workspace and relayq-demo's `relayq-redis` holds it, so PulseBoard
+      # shares it: paste relayq-redis's *internal* URL. Key spaces don't overlap (PulseBoard: ratelimit:,
+      # presence:, board:, socket.io adapter channels; RelayQ: BullMQ bull:*).
       - key: REDIS_URL
-        fromService: { type: keyvalue, name: pulseboard-redis, property: connectionString }
+        sync: false
       - key: API_BASE_PATH
         value: /api
       - key: TRUST_PROXY_HOPS
@@ -37,11 +40,3 @@ services:
         sync: false
       - key: RELAYQ_WEBHOOK_SECRET
         sync: false
-
-  # In-memory on the free plan: a restart drops rate-limit counters, presence and the board cache (all rebuildable).
-  - type: keyvalue
-    name: pulseboard-redis
-    plan: free
-    region: singapore
-    maxmemoryPolicy: noeviction
-    ipAllowList: [] # internal connections only
