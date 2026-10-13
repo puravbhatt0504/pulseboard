@@ -8,8 +8,8 @@ if (!env.PUBLIC_API_URL && env.RENDER_EXTERNAL_URL) env.PUBLIC_API_URL = `${env.
 execSync("npx prisma migrate deploy", { cwd: "apps/api", stdio: "inherit", env });
 
 const children = [];
-function run(name, script, extraEnv) {
-  const child = spawn("node", [script], { stdio: "inherit", env: { ...env, ...extraEnv } });
+function run(name, script, extraEnv, nodeArgs = []) {
+  const child = spawn("node", [...nodeArgs, script], { stdio: "inherit", env: { ...env, ...extraEnv } });
   child.on("exit", (code, signal) => {
     console.error(`${name} exited (${code ?? signal})`);
     for (const c of children) c.kill();
@@ -19,7 +19,7 @@ function run(name, script, extraEnv) {
 }
 
 run("web", "apps/web/.next/standalone/apps/web/server.js", { PORT: "3000", HOSTNAME: "127.0.0.1" });
-run("api", "apps/api/dist/index.js", { WEB_UPSTREAM: "http://127.0.0.1:3000" });
+run("api", "apps/api/dist/index.js", { WEB_UPSTREAM: "http://127.0.0.1:3000" }, ["--import", "./apps/api/dist/otel.js"]);
 
 for (const sig of ["SIGTERM", "SIGINT"]) {
   process.on(sig, () => {

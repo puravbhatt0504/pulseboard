@@ -6,6 +6,7 @@ import { invalidateBoard, requireRole } from "../boards/service.js";
 import { cardBoard } from "../cards/service.js";
 import type { ClientToServer, IO, ServerToClient, SocketData } from "../realtime/events.js";
 import { loadState, saveState } from "./persistence.js";
+import { traced } from "../tracing.js";
 
 export const PERSIST_DEBOUNCE_MS = 2000;
 /** Redis keeps every update of an active card this long after its last edit; Postgres has them long before. */
@@ -91,7 +92,7 @@ export function attachCollab(io: IO, deps: Omit<Deps, "io">) {
   io.on("connection", (socket: S) => {
     socket.data.cards = new Map();
 
-    socket.on("doc:join", async (p, ack) => {
+    socket.on("doc:join", traced("doc:join", async (p, ack) => {
       if (typeof ack !== "function") return;
       try {
         const cardId = typeof p?.cardId === "string" ? p.cardId : "";
@@ -109,9 +110,9 @@ export function attachCollab(io: IO, deps: Omit<Deps, "io">) {
         console.error("doc:join:", (e as Error).message);
         ack({ error: "bad_request" });
       }
-    });
+    }));
 
-    socket.on("doc:update", async (p) => {
+    socket.on("doc:update", traced("doc:update", async (p) => {
       const cardId = typeof p?.cardId === "string" ? p.cardId : "";
       const role = socket.data.cards?.get(cardId);
       if (!role || role === "viewer" || !bytes(p.update)) return void socket.emit("error", { code: role ? "forbidden" : "bad_request" });
@@ -128,7 +129,7 @@ export function attachCollab(io: IO, deps: Omit<Deps, "io">) {
       await redis.multi().rpush(logKey(cardId), enc).expire(logKey(cardId), UPDATE_LOG_TTL_S).exec();
       await redis.publish(channel(cardId), JSON.stringify({ from: instance, update: enc }));
       schedule(cardId, d);
-    });
+    }));
 
     // Carets and names: relayed as-is to the card's room, never stored. Viewers have carets too.
     socket.on("doc:awareness", (p) => {
@@ -138,9 +139,9 @@ export function attachCollab(io: IO, deps: Omit<Deps, "io">) {
       }
     });
 
-    socket.on("doc:leave", (p) => {
-      if (typeof p?.cardId === "string" && socket.data.cards?.has(p.cardId)) void leave(socket, p.cardId).catch(console.error);
-    });
+    socket.on("doc:leave", traced("doc:leave", async (p) => {
+      if (typeof p?.cardId === "string" && socket.data.cards?.has(p.cardId)) await leave(socket, p.cardId).catch(console.error);
+    }));
 
     socket.on("disconnect", () => {
       for (const cardId of [...(socket.data.cards?.keys() ?? [])]) void leave(socket, cardId).catch(console.error);

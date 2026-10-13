@@ -6,6 +6,7 @@ import { verifyAccess } from "../auth/jwt.js";
 import { requireRole } from "../boards/service.js";
 import { room, type IO } from "./events.js";
 import { addPresence, colorFor, listPresence, removePresence } from "./presence.js";
+import { traced } from "../tracing.js";
 
 export const CURSOR_MAX_PER_S = 20;
 // Cursors fan out as one batch per board per tick (latest position per user), not one message per move:
@@ -69,7 +70,7 @@ export function attachRealtime(server: HttpServer, deps: Omit<Deps, "io">): IO {
       await addPresence(redis, boardId, socket.id, { id: userId, name: user?.email.split("@")[0] ?? "?", color: colorFor(userId) });
       await broadcastPresence(boardId);
     }
-    socket.on("join_board", (p) => void join(p).catch(console.error));
+    socket.on("join_board", traced("join_board", (p) => join(p).catch(console.error)));
 
     socket.on("cursor", (p) => {
       const { boardId } = socket.data;

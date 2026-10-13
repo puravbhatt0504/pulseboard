@@ -4,6 +4,20 @@ Real-time collaborative Kanban: Express + Prisma + Postgres + Redis + Socket.io 
 
 Live demo (Render free tier, sleeps when idle): https://pulseboard-fmbj.onrender.com
 
+## Tracing
+
+OpenTelemetry in the API (`apps/api/src/otel.ts`, loaded with `node --import`; off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set). A board export is one trace: `pulseboard-api` → `relayq-api` → `relayq-worker` → the signed callback back into `pulseboard-api` (W3C `traceparent` on every hop).
+
+```bash
+docker compose up -d api jaeger
+```
+
+Then run RelayQ's api and worker with `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` and check the trace (prints the Jaeger link):
+
+```bash
+node deploy/trace-check.mjs
+```
+
 ## Load test
 
 `load/board.k6.js`: N users across 10 boards, each with a socket sending cursor updates at 10/s and one card move every 5 s.

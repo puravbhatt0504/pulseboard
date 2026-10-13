@@ -1,0 +1,34 @@
+// Load before the app: node --import ./dist/otel.js dist/index.js (same setup as RelayQ's src/otel.ts).
+// Does nothing unless OTEL_EXPORTER_OTLP_ENDPOINT is set (e.g. http://jaeger:4318).
+import { register } from "node:module";
+
+if (process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
+  // ESM: auto-instrumentation patches modules through this loader hook, so it must be registered first.
+  register("@opentelemetry/instrumentation/hook.mjs", import.meta.url);
+
+  const [{ NodeSDK }, { OTLPTraceExporter }, { HttpInstrumentation }, { ExpressInstrumentation }, { IORedisInstrumentation }, { PrismaInstrumentation }] =
+    await Promise.all([
+      import("@opentelemetry/sdk-node"),
+      import("@opentelemetry/exporter-trace-otlp-http"),
+      import("@opentelemetry/instrumentation-http"),
+      import("@opentelemetry/instrumentation-express"),
+      import("@opentelemetry/instrumentation-ioredis"),
+      import("@prisma/instrumentation"),
+    ]);
+
+  const sdk = new NodeSDK({
+    serviceName: process.env.OTEL_SERVICE_NAME ?? "pulseboard-api",
+    traceExporter: new OTLPTraceExporter(),
+    instrumentations: [
+      new HttpInstrumentation({ ignoreIncomingRequestHook: (req) => /^(\/api)?\/health/.test(req.url ?? "") }),
+      new ExpressInstrumentation(),
+      // No undici (fetch) instrumentation: the only fetch is the RelayQ enqueue, which injects traceparent itself
+      // (tracing.ts injectTrace). Both would send two traceparent headers, which RelayQ reads as one invalid value.
+      // The socket.io Redis adapter and presence touch Redis constantly; keep only spans under a request or socket event.
+      new IORedisInstrumentation({ requireParentSpan: true }),
+      new PrismaInstrumentation(),
+    ],
+  });
+  sdk.start();
+  process.once("beforeExit", () => void sdk.shutdown());
+}

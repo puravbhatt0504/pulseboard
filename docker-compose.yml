@@ -6,8 +6,10 @@ x-api-env: &api-env
   JWT_REFRESH_SECRET: dev-refresh-secret-change-me
   WEB_ORIGIN: http://localhost:3000
   PUBLIC_API_URL: http://localhost:4000
-  RELAYQ_URL: ${RELAYQ_URL:-}
+  RELAYQ_URL: ${RELAYQ_URL:-http://host.docker.internal:3200} # RelayQ on this machine (its API port)
   RELAYQ_API_KEY: ${RELAYQ_API_KEY:-}
+  RELAYQ_WEBHOOK_SECRET: ${RELAYQ_WEBHOOK_SECRET:-}
+  RELAYQ_SERVICE_TOKEN: ${RELAYQ_SERVICE_TOKEN:-}
 
 services:
   postgres:
@@ -28,11 +30,18 @@ services:
   api:
     build: { context: ., dockerfile: apps/api/Dockerfile }
     image: pulseboard-api
-    environment: *api-env
+    # Traces go to the Jaeger UI at http://localhost:16686. RelayQ on this machine joins the same trace with
+    # OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318.
+    environment: { <<: *api-env, OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318", OTEL_SERVICE_NAME: pulseboard-api }
     ports: ["4000:4000"]
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
+      jaeger: { condition: service_started }
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0 # OTLP/HTTP on 4318, UI on 16686 (same image as RelayQ's compose)
+    ports: ["16686:16686", "4318:4318"]
 
   web:
     build:

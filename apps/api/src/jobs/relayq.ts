@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { HttpError } from "../http.js";
+import { injectTrace } from "../tracing.js";
 
 // Client for RelayQ (../relayq). Payload shapes must match its zod schemas in src/queue/queues.ts.
 export type JobPayloads = {
@@ -36,7 +37,8 @@ export async function enqueue<T extends keyof JobPayloads>(type: T, payload: Job
   try {
     res = await fetch(`${base}/jobs`, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${process.env.RELAYQ_API_KEY ?? ""}` },
+      // traceparent: RelayQ stores it with the job, so its worker and the callback join this request's trace.
+      headers: injectTrace({ "content-type": "application/json", authorization: `Bearer ${process.env.RELAYQ_API_KEY ?? ""}` }),
       body: JSON.stringify({ type, payload, idempotencyKey }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });

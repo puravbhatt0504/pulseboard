@@ -43,4 +43,5 @@ WORKDIR /repo/apps/api
 USER node
 EXPOSE 4000
 HEALTHCHECK CMD wget -qO- http://localhost:4000/health || exit 1
-CMD ["node", "dist/index.js"]
+# --import ./dist/otel.js: OpenTelemetry before the app loads; a no-op unless OTEL_EXPORTER_OTLP_ENDPOINT is set.
+CMD ["node", "--import", "./dist/otel.js", "dist/index.js"]
