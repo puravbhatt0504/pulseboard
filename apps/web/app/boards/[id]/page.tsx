@@ -22,6 +22,7 @@ type Card = { id: string; columnId: string; title: string; position: string };
 type Column = { id: string; title: string; cards: Card[] };
 type Board = { id: string; title: string; columns: Column[] };
 type User = { id: string; name: string; color: string };
+type Hit = { cardId: string; title: string };
 
 const CURSOR_INTERVAL_MS = 50; // ≤ 20/s, matches the server throttle
 
@@ -78,6 +79,8 @@ export default function BoardPage() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [me, setMe] = useState("");
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<Hit[] | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const lastCursor = useRef(0);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -146,6 +149,20 @@ export default function BoardPage() {
       socket?.close();
     };
   }, [boardId, router]);
+
+  // Board search (semantic + full-text on the server), debounced.
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) return void setHits(null);
+    const t = setTimeout(() => {
+      api<Hit[]>(`/boards/${boardId}/search?q=${encodeURIComponent(q)}`).then(setHits, () => setHits([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [query, boardId]);
+
+  // Duplicate hint while typing a new card title; [] on any failure (it's only a hint).
+  const findSimilar = (title: string) =>
+    api<Hit[]>(`/boards/${boardId}/cards/similar`, { method: "POST", body: { title } }).catch(() => [] as Hit[]);
 
   function onPointerMove(e: React.PointerEvent) {
     const now = Date.now();
@@ -260,6 +277,31 @@ export default function BoardPage() {
             </span>
           ))}
         </div>
+        <div className="relative text-sm">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search cards"
+            aria-label="Search cards"
+            className="w-56 rounded border border-zinc-300 px-2 py-1"
+          />
+          {hits && (
+            <ul data-testid="search-results" className="absolute z-30 mt-1 w-72 rounded border border-zinc-200 bg-white py-1 shadow-lg">
+              {hits.length === 0 && <li className="px-3 py-1 text-zinc-500">No matches</li>}
+              {hits.map((h) => (
+                <li key={h.cardId}>
+                  <button
+                    onClick={() => (setOpenCardId(h.cardId), setQuery(""))}
+                    className="w-full truncate px-3 py-1 text-left hover:bg-zinc-100"
+                  >
+                    {h.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <form onSubmit={startExport} className="ml-auto flex items-center gap-2 text-sm">
           <select name="format" aria-label="Export format" className="rounded border border-zinc-300 px-2 py-1" defaultValue="csv">
             <option value="csv">CSV</option>
@@ -295,7 +337,7 @@ export default function BoardPage() {
         <DndContext sensors={sensors} collisionDetection={collision} onDragEnd={onDragEnd}>
           <div className="flex items-start gap-4">
             {board.columns.map((col) => (
-              <ColumnView key={col.id} column={col} onAddCard={addCard} onOpen={(id) => !isTmp(id) && setOpenCardId(id)} />
+              <ColumnView key={col.id} column={col} onAddCard={addCard} onOpen={(id) => !isTmp(id) && setOpenCardId(id)} findSimilar={findSimilar} />
             ))}
             <form onSubmit={addColumn} className="w-64 shrink-0">
               <input name="title" required maxLength={200} placeholder="+ Add column" className="w-full rounded border border-dashed border-zinc-300 bg-transparent px-3 py-2" />
@@ -340,12 +382,21 @@ function ColumnView({
   column,
   onAddCard,
   onOpen,
+  findSimilar,
 }: {
   column: Column;
   onAddCard: (e: React.FormEvent<HTMLFormElement>, columnId: string) => void;
   onOpen: (cardId: string) => void;
+  findSimilar: (title: string) => Promise<Hit[]>;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${column.id}` });
+  const [draft, setDraft] = useState("");
+  const [similar, setSimilar] = useState<Hit[]>([]);
+  useEffect(() => {
+    if (draft.trim().length < 8) return void setSimilar([]);
+    const t = setTimeout(() => void findSimilar(draft.trim()).then(setSimilar), 400);
+    return () => clearTimeout(t);
+  }, [draft]); // not findSimilar: a new function each render would re-query on every keystroke anyway
   return (
     <section
       ref={setNodeRef}
@@ -359,8 +410,23 @@ function ColumnView({
           <CardView key={card.id} card={card} onOpen={onOpen} />
         ))}
       </ul>
-      <form onSubmit={(e) => onAddCard(e, column.id)} className="mt-3">
-        <input name="title" required maxLength={200} placeholder="+ Add card" className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm" />
+      <form onSubmit={(e) => (onAddCard(e, column.id), setDraft(""))} className="mt-3">
+        <input
+          name="title"
+          required
+          maxLength={200}
+          placeholder="+ Add card"
+          onChange={(e) => setDraft(e.target.value)}
+          className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm"
+        />
+        {similar.length > 0 && (
+          <p data-testid="similar-hint" className="mt-1 text-xs text-amber-700">
+            Looks like{" "}
+            <button type="button" onClick={() => onOpen(similar[0].cardId)} className="underline">
+              {similar[0].title}
+            </button>
+          </p>
+        )}
       </form>
     </section>
   );

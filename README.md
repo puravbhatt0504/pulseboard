@@ -18,6 +18,40 @@ Then run RelayQ's api and worker with `OTEL_EXPORTER_OTLP_ENDPOINT=http://localh
 node deploy/trace-check.mjs
 ```
 
+## Semantic search + duplicate detection
+
+Cards are embedded (Voyage `voyage-3.5`, 1024 dims) through RelayQ: `embed.batch` when a card's text changes (skipped when the text hash is unchanged), and RelayQ's synchronous `POST /embed` for a search query or the "Looks like…" check while typing a new card. Vectors live in Postgres (pgvector, HNSW). Search fuses vector top 10 and full-text top 10 with Reciprocal Rank Fusion (k = 60), scoped to one board. If embeddings are unavailable, search falls back to full-text only.
+
+Eval data is real: GitHub issues that maintainers closed as "Duplicate of #N" in facebook/react and microsoft/vscode (`node eval/build-datasets.mjs`). That gives 368 labelled pairs (half true duplicates) and 184 search queries (a duplicate's title, expecting its original) over 85 cards.
+
+**These numbers are from the local stand-in embedder (`deploy/voyage-stub.mjs`: hashed words and trigrams), not Voyage.** It sees wording, not meaning, so it favours full-text. Re-run both evals with a real `VOYAGE_API_KEY` and update this table and `DUP_THRESHOLD`.
+
+| `npm run eval:dup` (stand-in) | precision | recall |
+|---|---|---|
+| threshold 0.85 | 0.892 | 0.315 |
+| **threshold 0.90 (chosen: lowest with precision ≥ 0.90)** | **0.963** | **0.141** |
+| threshold 0.95 | 1.000 | 0.092 |
+
+| `npm run eval:search` (stand-in) | Recall@5 |
+|---|---|
+| hybrid (RRF) | 0.853 |
+| vector only | 0.793 |
+| full-text only | 0.880 |
+
+To run the evals locally, start the stand-in, then RelayQ's API with `VOYAGE_BASE_URL=http://localhost:8099 VOYAGE_API_KEY=stub` (or with a real key and no `VOYAGE_BASE_URL`):
+
+```bash
+node deploy/voyage-stub.mjs
+```
+
+```bash
+npm run eval:dup -w apps/api
+```
+
+```bash
+npm run eval:search -w apps/api
+```
+
 ## Load test
 
 `load/board.k6.js`: N users across 10 boards, each with a socket sending cursor updates at 10/s and one card move every 5 s.

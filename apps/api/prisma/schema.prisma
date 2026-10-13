@@ -1,11 +1,13 @@
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x"]
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
 }
 
 model User {
@@ -68,15 +70,16 @@ model Column {
 }
 
 model Card {
-  id          String   @id @default(cuid())
+  id          String         @id @default(cuid())
   columnId    String
   title       String
-  description String   @default("")
+  description String         @default("")
   position    String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  column      Column   @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  column      Column         @relation(fields: [columnId], references: [id], onDelete: Cascade)
   doc         CardDoc?
+  embedding   CardEmbedding?
 
   @@index([columnId, position])
 }
@@ -116,4 +119,16 @@ model Export {
   board       Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   @@index([boardId])
+}
+
+// Semantic search (Phase 10). Written with raw SQL (Prisma can't bind vector). contentHash = sha256 of the text
+// that was embedded, so an edit that doesn't change the text costs nothing. The HNSW and full-text indexes live
+// only in migrations/3_card_embedding (Prisma can't express them).
+model CardEmbedding {
+  cardId      String                      @id
+  embedding   Unsupported("vector(1024)")
+  contentHash String
+  model       String
+  updatedAt   DateTime                    @updatedAt
+  card        Card                        @relation(fields: [cardId], references: [id], onDelete: Cascade)
 }

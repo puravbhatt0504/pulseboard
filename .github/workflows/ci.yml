@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16 # Postgres 16 + pgvector (semantic search)
         env: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: pulseboard }
         ports: ["5432:5432"]
         options: --health-cmd "pg_isready -U postgres" --health-interval 2s --health-retries 30
@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16 # Postgres 16 + pgvector (semantic search)
         env: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: pulseboard }
         ports: ["5432:5432"]
         options: --health-cmd "pg_isready -U postgres" --health-interval 2s --health-retries 30

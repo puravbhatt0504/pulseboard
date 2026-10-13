@@ -1,0 +1,184 @@
+{"query":"React Devtools won't connect to Application running on iOS Simulator","expected":"facebook/react#23307"}
+{"query":"[DevTools Bug] Cannot add node \"1\" because a node with that id is already in the Store.","expected":"facebook/react#23226"}
+{"query":"[Dev Tools] giving false positive if redux dev tools installed","expected":"facebook/react#23107"}
+{"query":"[DevTools Bug]: Chrome Dev Tools extension shows websites built with other framework as React web sites","expected":"facebook/react#23107"}
+{"query":"[DevTools Bug]: not sure if bug or  not:  devtools marks Youtube as built with react.","expected":"facebook/react#23107"}
+{"query":"Error: \"Cannot read property 'isCollapsed' of undefined\"","expected":"facebook/react#19927"}
+{"query":"Error: \"Commit tree does not contain fiber 158. This is a bug in React DevTools.\"","expected":"facebook/react#20431"}
+{"query":"Error: \"Cannot read property 'isCollapsed' of undefined\"","expected":"facebook/react#19927"}
+{"query":"Error: \"Commit tree does not contain fiber 19196. This is a bug in React DevTools.\"","expected":"facebook/react#20431"}
+{"query":"Error: \"Commit tree does not contain fiber 119. This is a bug in React DevTools.\"","expected":"facebook/react#20431"}
+{"query":"Error: \"Cannot read property 'isCollapsed' of undefined\"","expected":"facebook/react#19927"}
+{"query":"Error: \"Cannot read property 'isCollapsed' of undefined\"","expected":"facebook/react#19927"}
+{"query":"Error: \"Commit tree does not contain fiber 13861. This is a bug in React DevTools.\"","expected":"facebook/react#20197"}
+{"query":"Bug: `use-exhaustive-deps` static analysis doesn't work with destructure assignment or safety operator.","expected":"facebook/react#17312"}
+{"query":"Feature Proposal: className can be an array of class names strings","expected":"facebook/react#3138"}
+{"query":"Error \"Electron failed to install correctly, please delete node_modules/electron and try installing again\"","expected":"facebook/react#19976"}
+{"query":"Bug: Dependencies Array shows missing dependency error for generic type parameters","expected":"facebook/react#19742"}
+{"query":"Bug: react-hooks/exhaustive-deps reports a casted TypeScript type as a dependency","expected":"facebook/react#19742"}
+{"query":"Bug: Inconsistent render behavior triggered by setState in blur/focus callbacks","expected":"facebook/react#19400"}
+{"query":"Suggestion: don't re-throw errors caught by boundaries (in development)","expected":"facebook/react#10474"}
+{"query":"Bug: Blocking mode and events are broken (probably) for Material UI Rating component (example)","expected":"facebook/react#18591"}
+{"query":"Error: \"Commit tree already contains fiber 4194. This is a bug in React DevTools.\"","expected":"facebook/react#18859"}
+{"query":"Error: \"Commit tree already contains fiber 2099. This is a bug in React DevTools.\"","expected":"facebook/react#18859"}
+{"query":"Error: \"Commit tree does not contain fiber 12613. This is a bug in React DevTools.\"","expected":"facebook/react#18831"}
+{"query":"Error: \"Commit tree already contains fiber 1. This is a bug in React DevTools.\"","expected":"facebook/react#18859"}
+{"query":"Error: \"Commit tree does not contain fiber 21163. This is a bug in React DevTools.\"","expected":"facebook/react#18859"}
+{"query":"Error: \"Cannot read property 'concat' of undefined\"","expected":"facebook/react#18256"}
+{"query":"Error: \"Cannot read property 'concat' of undefined\"","expected":"facebook/react#18256"}
+{"query":"React Dev Tools: Components never shows up anymore","expected":"facebook/react#19002"}
+{"query":"Compile error with dependencies","expected":"facebook/react#19166"}
+{"query":"Error: \"Commit tree already contains fiber 1. This is a bug in React DevTools.\"","expected":"facebook/react#18859"}
+{"query":"Error: \"getCommitTree(): Unable to reconstruct tree for root \"1\" and commit 450\"","expected":"facebook/react#18987"}
+{"query":"Error: \"Cannot read property 'concat' of undefined\"","expected":"facebook/react#18256"}
+{"query":"Error: \"Commit tree does not contain fiber 35. This is a bug in React DevTools.\"","expected":"facebook/react#18831"}
+{"query":"Error: \"Cannot read property 'concat' of undefined\"","expected":"facebook/react#18256"}
+{"query":"Error: \"Cannot read property 'concat' of undefined\"","expected":"facebook/react#18256"}
+{"query":"Components and profiler tabs don't appear","expected":"facebook/react#19002"}
+{"query":"Bug: eslint exhaustive-deps doesn't recognize JSXIdentifier as used","expected":"facebook/react#18051"}
+{"query":"Error: \"Commit tree does not contain fiber 97. This is a bug in React DevTools.\"","expected":"facebook/react#18831"}
+{"query":"Error: \"Commit tree already contains fiber 10819. This is a bug in React DevTools.\"","expected":"facebook/react#18859"}
+{"query":"Error: \"Could not find commit data for root \"98\" and commit 8\"","expected":"facebook/react#18010"}
+{"query":"Error: \"Could not find commit data for root \"957\" and commit 2\"","expected":"facebook/react#18010"}
+{"query":"Error: \"Could not find node with id \"32\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"350\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"27720\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"834\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"815\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"1804\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"1145\" in commit tree\" on React Profiler","expected":"facebook/react#16446"}
+{"query":"Cannot analyse component State","expected":"facebook/react#17754"}
+{"query":"Error: \"Could not find node with id \"2456\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find commit data for root \"5621\" and commit 7\"","expected":"facebook/react#16506"}
+{"query":"Error: \"Could not find node with id \"5268\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"318\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"6\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"72\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"50\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"28540\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"638\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"5082\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"436\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"479\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"52381\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"44169\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"26038\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"5\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"6\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"836\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"75\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"30\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"1758\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"275099\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"15081\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"18486\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"490\" in commit tree\"","expected":"facebook/react#17500"}
+{"query":"Error: \"Could not find node with id \"5021\" in commit tree\"","expected":"facebook/react#17500"}
+{"query":"Error: \"Could not find node with id \"5203\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"113994\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find commit data for root \"335\" and commit 2\"","expected":"facebook/react#16506"}
+{"query":"Error: \"getCommitTree(): Unable to reconstruct tree for root \"1\" and commit 21\"","expected":"facebook/react#16412"}
+{"query":"Error: \"Could not find commit data for root \"729\" and commit 2\"","expected":"facebook/react#16506"}
+{"query":"Error: \"Could not find node with id \"1681\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find node with id \"291\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find commit data for root \"226\" and commit 6\"","expected":"facebook/react#16506"}
+{"query":"Error: \"Could not find node with id \"952\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find commit data for root \"34103\" and commit 1\"","expected":"facebook/react#16506"}
+{"query":"Error: \"Maximum call stack size exceeded\"","expected":"facebook/react#16491"}
+{"query":"State not updating in realtime","expected":"facebook/react#16843"}
+{"query":"React dev tools doesn't appear in chrome (Ubuntu 18.04.3)","expected":"facebook/react#16840"}
+{"query":"Error: \"Could not find commit data for root \"259\" and commit 1\"","expected":"facebook/react#16506"}
+{"query":"Error: \"Could not find node with id \"16070\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"getCommitTree(): Unable to reconstruct tree for root \"1\" and commit 38\"","expected":"facebook/react#16412"}
+{"query":"Error: \"getCommitTree(): Unable to reconstruct tree for root \"1\" and commit 1\"","expected":"facebook/react#16412"}
+{"query":"Version 4 removed files location","expected":"facebook/react#16497"}
+{"query":"React DevTools not persisting settings","expected":"facebook/react#16475"}
+{"query":"Error: \"Could not find node with id \"339\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Show property type of value (string,int,etc) on state/props.","expected":"facebook/react#16476"}
+{"query":"Error: \"getCommitTree(): Unable to reconstruct tree for root \"1\" and commit 4\"","expected":"facebook/react#16412"}
+{"query":"Error: \"Could not find commit data for root \"26047\" and commit 5\"","expected":"facebook/react#16506"}
+{"query":"DevTools: Too deep trees can cause a stack overflow","expected":"facebook/react#16501"}
+{"query":"Error: \"Could not find node with id \"6002\" in commit tree\"","expected":"facebook/react#16446"}
+{"query":"Error: \"Could not find commit data for root \"1\" and commit null\"","expected":"facebook/react#16414"}
+{"query":"The component is not updated when a new state is changed using a callback from useState","expected":"facebook/react#14812"}
+{"query":"`act` is not really helpful when setting state from promise callback","expected":"facebook/react#14775"}
+{"query":"Custom property names containing \"[\" or \"]\" get removed from custom components","expected":"facebook/react#10064"}
+{"query":"Tutorial Link Expired","expected":"facebook/react#8699"}
+{"query":"[Bug] \"Missing React element for debugID\" triggered by ReactDOMServer.renderToStaticMarkup","expected":"facebook/react#7187"}
+{"query":"Perf.printWasted() doesn't work when component conditionally returns null","expected":"facebook/react#6842"}
+{"query":"GitHub Copilot refuses implementation after Plan to Agent switch, citing Plan-mode restrictions","expected":"microsoft/vscode#340447"}
+{"query":"StandAlone terminal","expected":"microsoft/vscode#34442"}
+{"query":"Shell integration fails with set -u","expected":"microsoft/vscode#266489"}
+{"query":"Let users choose the models included in Auto mode","expected":"microsoft/vscode#266950"}
+{"query":"Font","expected":"microsoft/vscode#339599"}
+{"query":"Comments are not shown in md editor","expected":"microsoft/vscode#330947"}
+{"query":"The copilot rename feature doesn't always work","expected":"microsoft/vscode#316994"}
+{"query":"Missing Icons (again)","expected":"microsoft/vscode#334144"}
+{"query":"Remote SSH Extension icons not loading","expected":"microsoft/vscode#334144"}
+{"query":"Sidebar width is not stored on Modern UI with Layout density set to \"default\".","expected":"microsoft/vscode#334167"}
+{"query":"Extension icons no longer showing in the sidebar after VSCode update","expected":"microsoft/vscode#334144"}
+{"query":"Explorer's width is getting auto reset to minimum","expected":"microsoft/vscode#334167"}
+{"query":"Activity Bar extension icons disappear in Remote-SSH after upgrading to 1.136.1","expected":"microsoft/vscode#334144"}
+{"query":"Erweiterungen Icons und Symbole fehlen","expected":"microsoft/vscode#334144"}
+{"query":"Primary Side Bar loses its previous width after collapse / open","expected":"microsoft/vscode#334167"}
+{"query":"broken extensions icons when using remote ssh","expected":"microsoft/vscode#334144"}
+{"query":"Remote-SSH: extension icons fail to load (net::ERR_FAILED on vscode-managed-remote-resource) — regression in 1.136.x","expected":"microsoft/vscode#334144"}
+{"query":"extension icon missing","expected":"microsoft/vscode#334144"}
+{"query":"items are missing after update to last version","expected":"microsoft/vscode#334144"}
+{"query":"Primary side bar","expected":"microsoft/vscode#334167"}
+{"query":"Main menu in vscode.dev wont open","expected":"microsoft/vscode#334106"}
+{"query":"side panel now opens narrow all the time","expected":"microsoft/vscode#334167"}
+{"query":"Menu bar file menu icon does not work","expected":"microsoft/vscode#334106"}
+{"query":"Hamburger menu doesn't render/open on mouse click, only works via keyboard (Alt + arrows)","expected":"microsoft/vscode#334106"}
+{"query":"The new version's menu bar is unresponsive, with no options appearing","expected":"microsoft/vscode#334106"}
+{"query":"Chat session and history disappear when opening a folder/project in a window that started with an empty workspace","expected":"microsoft/vscode#310586"}
+{"query":"Chat session history intermittently lost/truncated after closing VS Code (possibly related to closing while a chat is open)","expected":"microsoft/vscode#321290"}
+{"query":"Agents can not output more than 500 characters in task_complete","expected":"microsoft/vscode#332898"}
+{"query":"Bug: Remote-SSH 0.126.0 fails with terminalRemoteResolver API proposal error","expected":"microsoft/vscode#332693"}
+{"query":"Problem opening solution on remote linux ubuntu server","expected":"microsoft/vscode#332693"}
+{"query":"error message with remote-ssh: 0.126.0","expected":"microsoft/vscode#332693"}
+{"query":"Please add test cases to remote ssh extension and execute them before each release. You guys are breaking it and blocking our work.","expected":"microsoft/vscode#332693"}
+{"query":"ssh remote插件问题","expected":"microsoft/vscode#332693"}
+{"query":"suggestive text","expected":"microsoft/vscode#332567"}
+{"query":"[iPadOS][Codespaces] Webview-based extensions render only in the top ~25% of the sidebar","expected":"microsoft/vscode#332765"}
+{"query":"Copilot \"View All Edits\" shows accepted/previous edits instead of only pending changed files","expected":"microsoft/vscode#303653"}
+{"query":"Chat sessions disappear from history but remain in Chat Debug view; Export finds no data","expected":"microsoft/vscode#321290"}
+{"query":"Active Agent Host sessions can retain stale synchronized skill paths","expected":"microsoft/vscode#328464"}
+{"query":"fix: guard identity lookup for root element in getDataNode (fixes #330873)","expected":"microsoft/vscode#311444"}
+{"query":"Duplicate models and providers appear in the GitHub Copilot provider selector.","expected":"microsoft/vscode#327644"}
+{"query":"Support case-insensitive comparison in the diff editor (diffEditor.ignoreCase)","expected":"microsoft/vscode#330613"}
+{"query":"VS Code Help menu pop-ups close automatically","expected":"microsoft/vscode#329901"}
+{"query":"Notification and error message popup's issue","expected":"microsoft/vscode#329901"}
+{"query":"JSX multi-line attribute alignment is not preserved after formatting","expected":"microsoft/vscode#331937"}
+{"query":"Warning box is automatically getting closed","expected":"microsoft/vscode#329901"}
+{"query":"Pop is not opening","expected":"microsoft/vscode#329901"}
+{"query":"Confirmation dialogs immediately close on Windows 11 (Delete, Sync Changes, About) in VS Code 1.132.0","expected":"microsoft/vscode#329901"}
+{"query":"when we are live the code the not work in mac but the same problem in window is working bu not mac","expected":"microsoft/vscode#329189"}
+{"query":"Title bar background customizations not working on Modern UI","expected":"microsoft/vscode#326126"}
+{"query":"\"Morern UI\" feature broke color theme button","expected":"microsoft/vscode#328190"}
+{"query":"workbench.colorCustomizations stopped applying to the main window in VS Code 1.131.0","expected":"microsoft/vscode#326445"}
+{"query":"Local language models added to chatlanguagemodels.json are not displayed in Chat model selection","expected":"microsoft/vscode#328601"}
+{"query":"Unable to play video in integrated browser","expected":"microsoft/vscode#289795"}
+{"query":"Color Theme dropdown flashes and closes immediately when opened via Settings gear icon","expected":"microsoft/vscode#328190"}
+{"query":"Session irreversibly lost after changes to workspace folder and saving workspace","expected":"microsoft/vscode#301793"}
+{"query":"[Bug] Theme selection menu (Color/File Icon/Product Icon) flashes and closes immediately when opened from gear icon","expected":"microsoft/vscode#328190"}
+{"query":"Modern UI: Can't click on Explorer/Search/Source Control/... by moving the mouse to the leftmost position","expected":"microsoft/vscode#325256"}
+{"query":"Feature Request: Introduce a slower release channel (e.g., Monthly/LTS) or reconsider the weekly Stable cadence","expected":"microsoft/vscode#309223"}
+{"query":"Set the VS Code release cycle for updates to 6 months.","expected":"microsoft/vscode#309223"}
+{"query":"[gh-aw] Protected Files: fix: defer chat list height update to next animation frame (fixes #316501)","expected":"microsoft/vscode#327949"}
+{"query":"[gh-aw] Protected Files: fix: defer chat list height update to next animation frame (fixes #316501)","expected":"microsoft/vscode#327949"}
+{"query":"Completely broken translation in code-server","expected":"microsoft/vscode#299425"}
+{"query":"Copilot Chat: file links render as broken vscode-file:// URIs instead of workspace paths","expected":"microsoft/vscode#313533"}
+{"query":"Any pop-up triggered by any command other than Command Pallete will be thrown.","expected":"microsoft/vscode#328190"}
+{"query":"Copilot `/compact ` doesn't work","expected":"microsoft/vscode#321648"}
+{"query":"Keychain issue for GitHub-Credentials on PI OS (Debian Trixie on Raspberry PI500+) with Current_Desktop: labwc:wlroots & Session_Type: wayland","expected":"microsoft/vscode#187338"}
+{"query":"Renderer crashes with V8 OOM when restoring Claude agent sessions containing large repeated change lists","expected":"microsoft/vscode#323387"}
+{"query":"Chinese Simplified Language Pack string misalignment in VS Code 1.129.1 Server Mode","expected":"microsoft/vscode#299425"}
+{"query":"1.130.0-insider: Profile pop-up menu doesn't appear on hover or click","expected":"microsoft/vscode#326248"}
+{"query":"chat: hangs failing to ask permission to write file outside repo","expected":"microsoft/vscode#316588"}
+{"query":"git submenus not opening in new release","expected":"microsoft/vscode#326317"}
+{"query":"VS Code launches `wsl.exe -l -q` in a visible console window on systems without WSL installed","expected":"microsoft/vscode#233618"}
+{"query":"VS Code does not connect to tunnel after updating","expected":"microsoft/vscode#324151"}
+{"query":"[Terminal] Manually restart action","expected":"microsoft/vscode#214242"}
+{"query":"Incorrect terminal output length in Python while using input()","expected":"microsoft/vscode#325086"}
+{"query":"Incorrect terminal output length in Python while using input()","expected":"microsoft/vscode#325086"}

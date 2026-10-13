@@ -13,7 +13,7 @@ x-api-env: &api-env
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16 # Postgres 16 + pgvector (semantic search)
     environment: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: pulseboard }
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck: { test: ["CMD", "pg_isready", "-U", "postgres"], interval: 2s, retries: 30 }

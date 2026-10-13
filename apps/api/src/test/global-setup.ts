@@ -1,7 +1,6 @@
 import { execSync } from "node:child_process";
-import { rmSync } from "node:fs";
-import EmbeddedPostgres from "embedded-postgres";
 import type { TestProject } from "vitest/node";
+import { startPostgres } from "./pg.js";
 
 declare module "vitest" {
   export interface ProvidedContext {
@@ -9,18 +8,14 @@ declare module "vitest" {
   }
 }
 
-// CI provides DATABASE_URL (fresh service container); locally we boot a throwaway Postgres 16.
+// CI provides DATABASE_URL (fresh service container); locally we boot a throwaway Postgres 16 + pgvector.
 // Both start empty, so a plain (non-destructive) db push is enough.
 export default async function setup(project: TestProject) {
-  let pg: EmbeddedPostgres | undefined;
+  let pg: Awaited<ReturnType<typeof startPostgres>> | undefined;
   let url = process.env.DATABASE_URL;
   if (!url) {
-    const databaseDir = ".pgdata-test";
-    rmSync(databaseDir, { recursive: true, force: true });
-    pg = new EmbeddedPostgres({ databaseDir, user: "postgres", password: "postgres", port: 54329, persistent: false, onLog: () => {} });
-    await pg.initialise();
-    await pg.start();
-    url = "postgresql://postgres:postgres@localhost:54329/postgres";
+    pg = await startPostgres(54329);
+    url = pg.url;
   }
   execSync("npx prisma db push --skip-generate", {
     stdio: "inherit",
@@ -28,6 +23,6 @@ export default async function setup(project: TestProject) {
   });
   project.provide("databaseUrl", url);
   return async () => {
-    await pg?.stop();
+    pg?.stop();
   };
 }

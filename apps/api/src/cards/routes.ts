@@ -5,6 +5,7 @@ import { h, HttpError, requireString } from "../http.js";
 import { cardBoard, createCard, updateCard } from "./service.js";
 import { presignAttachment } from "../uploads/s3.js";
 import { emitCard } from "../realtime/events.js";
+import { scheduleEmbed } from "../ai/embed.js";
 
 const optional = (v: unknown, field: string, max: number) => (v === undefined ? undefined : requireString(v, field, max));
 
@@ -21,6 +22,7 @@ export function cardsRouter(deps: Deps) {
     const title = requireString(req.body?.title, "title");
     const { card, boardId } = await createCard(deps, req.userId, req.params.id, title, description(req.body?.description));
     emitCard(deps.io, boardId, "card:created", card, req.userId);
+    void scheduleEmbed(deps, card.id).catch(console.error);
     res.status(201).json(card);
   }));
 
@@ -39,6 +41,7 @@ export function cardsRouter(deps: Deps) {
       after: optional(b.after, "after", 64),
     });
     emitCard(deps.io, boardId, moved ? "card:moved" : "card:updated", card, req.userId);
+    if (b.title !== undefined || b.description !== undefined) void scheduleEmbed(deps, card.id).catch(console.error);
     res.json(card);
   }));
 

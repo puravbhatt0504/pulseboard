@@ -6,6 +6,7 @@ import { injectTrace } from "../tracing.js";
 export type JobPayloads = {
   "board.export": { boardId: string; format: "csv" | "json"; callbackUrl: string };
   "email.digest": { to: string; userName: string; items: { title: string; url?: string }[] };
+  "embed.batch": { items: { id: string; text: string }[]; model: string; callbackUrl: string };
 };
 
 const TIMEOUT_MS = 5000;

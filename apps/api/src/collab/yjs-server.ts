@@ -7,6 +7,7 @@ import { cardBoard } from "../cards/service.js";
 import type { ClientToServer, IO, ServerToClient, SocketData } from "../realtime/events.js";
 import { loadState, saveState } from "./persistence.js";
 import { traced } from "../tracing.js";
+import { scheduleEmbed } from "../ai/embed.js";
 
 export const PERSIST_DEBOUNCE_MS = 2000;
 /** Redis keeps every update of an active card this long after its last edit; Postgres has them long before. */
@@ -49,6 +50,7 @@ export function attachCollab(io: IO, deps: Omit<Deps, "io">) {
     d.timer = undefined;
     await saveState(deps, cardId, d.doc);
     await invalidateBoard(deps, d.boardId);
+    await scheduleEmbed(deps, cardId); // the description's plain text just changed (or may have)
   };
   const schedule = (cardId: string, d: Loaded) => {
     d.timer ??= setTimeout(() => void persist(cardId, d).catch((e) => console.error("collab persist:", e.message)), PERSIST_DEBOUNCE_MS);

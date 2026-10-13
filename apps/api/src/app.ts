@@ -10,6 +10,7 @@ import { cardsRouter } from "./cards/routes.js";
 import { attachRealtime } from "./realtime/socket.js";
 import { attachCollab } from "./collab/yjs-server.js";
 import type { IO } from "./realtime/events.js";
+import { aiRouter } from "./ai/routes.js";
 
 export type Deps = { prisma: PrismaClient; redis: Redis; io?: IO };
 
@@ -48,7 +49,7 @@ export function createApp(deps: Deps) {
     res.status(db === "ok" && redis === "ok" ? 200 : 503).json({ db, redis });
   }));
   api.use("/auth", authRouter(deps));
-  api.use(boardsRouter(deps), cardsRouter(deps));
+  api.use(boardsRouter(deps), cardsRouter(deps), aiRouter(deps));
   app.use(apiBasePath() || "/", api);
 
   const onError: ErrorRequestHandler = (err, _req, res, _next) => {
