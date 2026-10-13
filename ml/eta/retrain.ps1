@@ -44,9 +44,11 @@ try {
   }
 
   $h = @{ authorization = "Bearer $key" }
-  $body = @{ type = 'ml.retrain'; payload = @{ modelName = 'eta'; dataUrl = 'synthetic:4000' } } | ConvertTo-Json -Depth 3
+  # Real data from `python -m eta.github_import` if present (ml/eta/models is /models in the trainer), else synthetic.
+  $dataUrl = if (Test-Path (Join-Path $PSScriptRoot 'models\data\eta.csv')) { 'file:///models/data/eta.csv' } else { 'synthetic:4000' }
+  $body = @{ type = 'ml.retrain'; payload = @{ modelName = 'eta'; dataUrl = $dataUrl } } | ConvertTo-Json -Depth 3
   $job = Invoke-RestMethod -Method Post -Uri "$url/jobs" -Headers $h -ContentType 'application/json' -Body $body
-  Log "queued $($job.jobId)"
+  Log "queued $($job.jobId) on $dataUrl"
   $script:status = $null
   Wait-Until "job $($job.jobId)" 3600 { $script:status = (Invoke-RestMethod "$url/jobs/$($job.jobId)" -Headers $h).status; $script:status -in 'completed', 'failed', 'dead' }
   if ($script:status -ne 'completed') { throw "job $($job.jobId) ended $($script:status)" }
