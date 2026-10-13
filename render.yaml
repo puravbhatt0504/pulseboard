@@ -1,0 +1,47 @@
+# Free always-on demo while AWS can't create CloudFront. One web service serves the API (/api, /socket.io)
+# and proxies every other path to Next in the same container, so cookies and sockets are same-origin.
+# Free web services sleep after 15 min idle and take ~1 min to wake. Postgres is Neon (free): paste its
+# *direct* (non-pooled) connection string as DATABASE_URL; Prisma migrations need a direct connection.
+services:
+  - type: web
+    name: pulseboard
+    runtime: docker
+    plan: free
+    region: singapore # same region as relayq-demo
+    dockerfilePath: ./deploy/render/Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService: { type: keyvalue, name: pulseboard-redis, property: connectionString }
+      - key: API_BASE_PATH
+        value: /api
+      - key: TRUST_PROXY_HOPS
+        value: "1" # Render's edge proxy
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: NEXT_PUBLIC_API_URL
+        value: /api
+      - key: NEXT_PUBLIC_SOCKET_URL
+        value: /
+      # RelayQ board exports. RELAYQ_SERVICE_TOKEN must also be set as relayq-demo's PULSEBOARD_TOKEN;
+      # RELAYQ_WEBHOOK_SECRET must equal relayq-demo's WEBHOOK_SECRET; RELAYQ_API_KEY is a tenant key from RelayQ.
+      - key: RELAYQ_URL
+        value: https://relayq-demo.onrender.com
+      - key: RELAYQ_SERVICE_TOKEN
+        generateValue: true
+      - key: RELAYQ_API_KEY
+        sync: false
+      - key: RELAYQ_WEBHOOK_SECRET
+        sync: false
+
+  # In-memory on the free plan: a restart drops rate-limit counters, presence and the board cache (all rebuildable).
+  - type: keyvalue
+    name: pulseboard-redis
+    plan: free
+    region: singapore
+    maxmemoryPolicy: noeviction
+    ipAllowList: [] # internal connections only

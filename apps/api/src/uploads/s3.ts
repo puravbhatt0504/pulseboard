@@ -18,7 +18,7 @@ export async function presignAttachment(cardId: string, filename: unknown, conte
     throw new HttpError(400, `size must be 1-${MAX_BYTES} bytes`);
   }
   const bucket = process.env.S3_BUCKET;
-  if (!bucket) throw new Error("S3_BUCKET is not set");
+  if (!bucket) throw new HttpError(503, "uploads not configured"); // e.g. the Render demo has no S3
   client ??= new S3Client({});
   const key = `attachments/${cardId}/${randomUUID()}-${filename.replace(/[^\w.-]/g, "_")}`;
   const url = await getSignedUrl(

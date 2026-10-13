@@ -11,6 +11,7 @@ if (!process.env.DATABASE_URL && DB_HOST) {
 
 const prisma = new PrismaClient();
 const redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379");
+redis.on("error", (err) => console.error("redis:", err.message));
 const port = Number(process.env.PORT ?? 4000);
 
 createServer({ prisma, redis }).server.listen(port, () => console.log(`api on :${port}`));

@@ -1,3 +1,4 @@
+import { request as httpRequest } from "node:http";
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 
 export class HttpError extends Error {
@@ -19,3 +20,21 @@ export function requireString(v: unknown, field: string, max = 200): string {
 
 // Prod serves web and API on one host, so every API route (and the refresh cookie) lives under /api there.
 export const apiBasePath = () => process.env.API_BASE_PATH ?? "";
+
+// Single-origin deploys (Render): the API fronts the web app and streams every non-API request to it.
+export function proxyTo(upstream: string): RequestHandler {
+  const target = new URL(upstream);
+  return (req, res) => {
+    const upstreamReq = httpRequest(
+      { hostname: target.hostname, port: target.port, path: req.originalUrl, method: req.method, headers: { ...req.headers, host: target.host } },
+      (upstreamRes) => {
+        res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers);
+        upstreamRes.pipe(res);
+      },
+    );
+    upstreamReq.on("error", () => {
+      if (!res.headersSent) res.status(502).json({ error: "web unavailable" });
+    });
+    req.pipe(upstreamReq);
+  };
+}

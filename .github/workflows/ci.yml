@@ -76,6 +76,14 @@ jobs:
           docker compose run --rm migrate
           docker compose up -d --wait api
           curl -fsS http://localhost:4000/health
+          # Render image: one origin, pages proxied to Next, API under /api, real Postgres + Redis.
+          docker build -f deploy/render/Dockerfile -t pulseboard-render .
+          docker run -d --name render --network "$(basename "$PWD")_default" -p 10000:10000             -e PORT=10000 -e DATABASE_URL=postgresql://postgres:postgres@postgres:5432/pulseboard             -e REDIS_URL=redis://redis:6379 -e JWT_ACCESS_SECRET=ci -e JWT_REFRESH_SECRET=ci pulseboard-render
+          for i in $(seq 1 60); do curl -fsS http://localhost:10000/api/health && break; sleep 2; done
+          curl -fsS http://localhost:10000/login | grep -q "Sign in"
+          curl -fsS -X POST http://localhost:10000/api/auth/register -H "content-type: application/json"             -d '{"email":"ci@render.test","password":"password123"}' | grep -q '"email":"ci@render.test"'
+          docker logs render | tail -20
+          docker rm -f render
           docker compose down
 
   # Runs only once the PulseboardData stack exists and the repo variable AWS_DEPLOY_ROLE_ARN is set.

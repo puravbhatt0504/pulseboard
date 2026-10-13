@@ -14,7 +14,9 @@ export function attachRealtime(server: HttpServer, deps: Omit<Deps, "io">): IO {
   const io: IO = new Server(server, {
     cors: { origin: process.env.WEB_ORIGIN ?? "http://localhost:3000", credentials: true },
   });
-  io.adapter(createAdapter(redis, redis.duplicate()));
+  const sub = redis.duplicate();
+  sub.on("error", (err) => console.error("redis (adapter sub):", err.message));
+  io.adapter(createAdapter(redis, sub));
 
   io.use((socket, next) => {
     try {

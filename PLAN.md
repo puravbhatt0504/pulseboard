@@ -135,6 +135,13 @@ Prisma models: `User`, `Board`, `BoardMember(role: owner|editor|viewer)`, `Colum
   - CI `deploy` job (push to `main`, only if repo var `AWS_DEPLOY_ROLE_ARN` is set): OIDC → build + push both images tagged `${{ github.sha }}` → `cdk deploy PulseboardApp -c imageTag=<sha>`.
   - **Checks:** `cd infra && npx cdk synth --strict` exits 0; `apps/api` test: with `API_BASE_PATH=/api`, `GET /api/health` → 200, `GET /health` → 404, login cookie has `Path=/api/auth`. After deploy: `curl https://<cloudfront>/api/health` → `200 {"db":"ok","redis":"ok"}`.
 
+- **Free always-on demo (Render + Neon)** while AWS can't create CloudFront (account unverified). One Render web service, one origin:
+  - `deploy/render/Dockerfile` builds api + web into one image; `deploy/render/start.mjs` runs `prisma migrate deploy`, then starts Next (`127.0.0.1:3000`) and the API (`$PORT`), sets `PUBLIC_API_URL=$RENDER_EXTERNAL_URL/api` if unset, and exits if either process exits.
+  - API env `WEB_UPSTREAM=http://127.0.0.1:3000`: every path outside `API_BASE_PATH` (`/api`) is proxied there; `/socket.io` stays on the API server. Example: `GET /login` → Next HTML; `GET /api/health` → API JSON.
+  - `render.yaml`: web service (free, singapore) + Key Value (free). `DATABASE_URL` = Neon string (prompted), JWT secrets generated, `RELAYQ_URL=https://relayq-demo.onrender.com`, `RELAYQ_SERVICE_TOKEN` generated, `RELAYQ_API_KEY` / `RELAYQ_WEBHOOK_SECRET` prompted.
+  - Uploads without S3 configured → `503` (not `500`).
+  - **Checks:** `app.test` style unit test: with `WEB_UPSTREAM` set, `/login` is answered by a fake upstream and `/api/health` by the API; `curl https://<render-url>/api/health` → `200 {"db":"ok","redis":"ok"}`; `/login` returns HTML.
+
 **Done:** CI green on `main`; `curl https://<prod>/health` → `200 {"db":"ok","redis":"ok"}`; `docker image ls pulseboard-api` size < 200 MB.
 
 ## Phase 7 — Load test (the resume number)
