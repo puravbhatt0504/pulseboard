@@ -237,6 +237,9 @@ CI fails if any metric drops > 5 points vs `eval/baseline.json`. Report table go
 - Serve: FastAPI `POST /predict {features} → {p50Hours, p90Hours}` (quantile models), Docker image, called by PulseBoard to show "usually done in ~2 days" on cards.
 - Retrain weekly as a RelayQ job `ml.retrain`; new model promoted only if test MAE ≤ current; model + metrics versioned in S3 (`models/eta/<date>/`).
 
+**Status (2026-10-13):** `ml/eta` built ahead of order for RelayQ's `ml.retrain`. 8 pytest pass in the image. Test MAE: baseline 26.68 h, linear 18.99 h, XGBoost 16.70 h; p90 covers 91.8%. Real `docker run` trainer path verified (prints the contract JSON line last). The "worse retrain is not promoted" check lives in relayq `test/retrain.test.ts`.
+Open: (1) artifacts go to `file:///models/...` unless `MODEL_BUCKET` is set, and RelayQ's `docker run --rm` mounts no volume, so a local retrain's model is lost; set `MODEL_BUCKET`, or have RelayQ pass `-v`. (2) The server isn't hosted anywhere yet, so `MODEL_SUBSCRIBERS_ETA` has no URL. (3) PulseBoard has no labels, comments, checklists or assignees yet, so training is synthetic-only.
+
 **Done:** `pytest ml/eta` passes; `train.py` prints MAE for all three models and XGBoost beats the baseline on the time-split test set (numbers recorded in README); p90 interval covers ≥ 85% of test cases; `/predict` with missing features → 422; a retrain that is worse is not promoted (test with a forced-bad model).
 
 ---

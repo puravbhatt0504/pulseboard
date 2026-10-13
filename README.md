@@ -25,3 +25,17 @@ The PLAN "Done" check is for a 2-instance production deploy, which hasn't been r
 cd apps/api && TRUST_PROXY_HOPS=1 npx tsx src/test/e2e-server.ts   # local target
 k6 run -e VUS=500 load/board.k6.js
 ```
+
+## Card completion-time model (`ml/eta`)
+
+Trainer image `pulseboard-ml-eta` for RelayQ's `ml.retrain` job: `docker build -t pulseboard-ml-eta ml/eta`.
+Synthetic data (assumptions in `ml/eta/eta/simulate.py`), time split (train on the oldest 80%, test on the newest 20%), 2026-10-13:
+
+| Model | test MAE |
+|---|---:|
+| median per board (baseline) | 26.68 h |
+| linear regression | 18.99 h |
+| XGBoost (p50 quantile) | **16.70 h** |
+
+The p90 prediction covers 91.8% of test cards.
+Serve: `docker run -p 8000:8000 -e WEBHOOK_SECRET=... -e RELAYQ_URL=... -e RELAYQ_API_KEY=... pulseboard-ml-eta uvicorn eta.serve:app --host 0.0.0.0`, then set RelayQ's `MODEL_SUBSCRIBERS_ETA=http://<host>:8000/reload`.
