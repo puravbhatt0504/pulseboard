@@ -140,6 +140,7 @@ Prisma models: `User`, `Board`, `BoardMember(role: owner|editor|viewer)`, `Colum
   - API env `WEB_UPSTREAM=http://127.0.0.1:3000`: every path outside `API_BASE_PATH` (`/api`) is proxied there; `/socket.io` stays on the API server. Example: `GET /login` → Next HTML; `GET /api/health` → API JSON.
   - `render.yaml`: web service (free, singapore) + Key Value (free). `DATABASE_URL` = Neon string (prompted), JWT secrets generated, `RELAYQ_URL=https://relayq-demo.onrender.com`, `RELAYQ_SERVICE_TOKEN` generated, `RELAYQ_API_KEY` / `RELAYQ_WEBHOOK_SECRET` prompted.
   - Uploads without S3 configured → `503` (not `500`).
+  - Neon project `summer-feather-59291340` (aws-ap-southeast-1, Postgres 18; Neon free has no 16 option for new projects) — direct, non-pooled URL.
   - **Checks:** `app.test` style unit test: with `WEB_UPSTREAM` set, `/login` is answered by a fake upstream and `/api/health` by the API; `curl https://<render-url>/api/health` → `200 {"db":"ok","redis":"ok"}`; `/login` returns HTML.
 
 **Done:** CI green on `main`; `curl https://<prod>/health` → `200 {"db":"ok","redis":"ok"}`; `docker image ls pulseboard-api` size < 200 MB.
