@@ -15,8 +15,11 @@ Measured 2026-10-13, 60 s, **one API process on a laptop** (embedded Postgres, i
 |------:|--------------:|-----------------:|---------------:|-------:|
 | 200   | 90 ms         | 1 ms             | 336 ms         | 0%     |
 | 500   | 2.35 s        | 2 ms             | 3.16 s         | 0%     |
+| 500, batched cursors | **2 ms** | 1 ms         | 45 ms          | 0%     |
 
-The 80 ms p95 target is **not met** at 500 users on one process. The load is mostly cursor fan-out: 5,000 cursor events/s, each sent to the 49 other users on the board. The PLAN target is for a 2-instance production deploy, which hasn't been run.
+The first two rows relayed every cursor move to every other user: 5,000 moves/s, each to 49 people, about 245,000 messages/s, and one process fell behind.
+Cursors now go out as one batch per board every 66 ms, holding only each user's latest position. That brought 500 users to a 2 ms broadcast p95 on one laptop process.
+The PLAN "Done" check is for a 2-instance production deploy, which hasn't been run.
 
 ```
 cd apps/api && TRUST_PROXY_HOPS=1 npx tsx src/test/e2e-server.ts   # local target

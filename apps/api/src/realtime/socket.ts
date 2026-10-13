@@ -8,6 +8,9 @@ import { room, type IO } from "./events.js";
 import { addPresence, colorFor, listPresence, removePresence } from "./presence.js";
 
 export const CURSOR_MAX_PER_S = 20;
+// Cursors fan out as one batch per board per tick (latest position per user), not one message per move:
+// N users at 10 moves/s cost N*(N-1)*10 messages/s unbatched, N*15 batched.
+export const CURSOR_FLUSH_MS = 66;
 
 export function attachRealtime(server: HttpServer, deps: Omit<Deps, "io">): IO {
   const { prisma, redis } = deps;
@@ -29,6 +32,15 @@ export function attachRealtime(server: HttpServer, deps: Omit<Deps, "io">): IO {
 
   const broadcastPresence = async (boardId: string) =>
     io.to(room(boardId)).emit("presence:update", { users: await listPresence(redis, boardId) });
+
+  // ponytail: per-process batches; with several instances each flushes its own users (receivers get one batch per instance per tick).
+  const pending = new Map<string, Map<string, { userId: string; x: number; y: number }>>();
+  const flush = setInterval(() => {
+    for (const [boardId, byUser] of pending) io.to(room(boardId)).volatile.emit("cursors", { cursors: [...byUser.values()] });
+    pending.clear();
+  }, CURSOR_FLUSH_MS);
+  flush.unref();
+  server.on("close", () => clearInterval(flush));
 
   async function leave(socketId: string, boardId: string) {
     await removePresence(redis, boardId, socketId);
@@ -62,12 +74,13 @@ export function attachRealtime(server: HttpServer, deps: Omit<Deps, "io">): IO {
     socket.on("cursor", (p) => {
       const { boardId } = socket.data;
       if (!boardId || !Number.isFinite(p?.x) || !Number.isFinite(p?.y)) return;
-      // Sliding window: relay only if fewer than 20 went out in the last 1000 ms; drop the rest.
+      // Sliding window: accept at most 20 in any 1000 ms per socket; drop the rest.
       const now = Date.now();
       if (sent.length === CURSOR_MAX_PER_S && now - sent[0] < 1000) return;
       sent.push(now);
       if (sent.length > CURSOR_MAX_PER_S) sent.shift();
-      socket.to(room(boardId)).volatile.emit("cursor", { userId, x: p.x, y: p.y });
+      if (!pending.has(boardId)) pending.set(boardId, new Map());
+      pending.get(boardId)!.set(userId, { userId, x: p.x, y: p.y });
     });
 
     socket.on("disconnect", () => {

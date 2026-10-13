@@ -251,7 +251,7 @@ OAuth providers, GraphQL, mobile app, Kubernetes, billing.
 - [x] Phase 4 Frontend
 - [x] Phase 5 Uploads + RelayQ
 - [ ] Phase 6 Docker / CI / AWS — CI green on main, api image 183 MB, container /health ok; Render demo live at https://pulseboard-fmbj.onrender.com (`/api/health` → `{"db":"ok","redis":"ok"}`, register→login→create board→read board ok, 2026-10-13); **pending: AWS deploy (CloudFront verification)**
-- [ ] Phase 7 Load test — `load/board.k6.js` built; local 1-process run: 200 users p95 90 ms, 500 users p95 2.35 s, 0% errors (README). **Not done: target is p95 < 80 ms at 500 users on the 2-task prod deploy, which does not exist yet.**
+- [ ] Phase 7 Load test — `load/board.k6.js` built; local 1-process run with batched cursors (`CURSOR_FLUSH_MS` = 66 in `realtime/socket.ts`): 500 users p95 2 ms, 0% errors (was 2.35 s unbatched; README). **Not done: the check is p95 < 80 ms on the 2-task prod deploy, which does not exist yet.**
 - [ ] Phase 8 CRDT editing + offline
 - [ ] Phase 9 Tracing
 - [ ] Phase 10 Semantic search + duplicates

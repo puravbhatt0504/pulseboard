@@ -11,7 +11,7 @@ export interface ServerToClient {
   "card:moved": (p: CardEvent) => void;
   "card:deleted": (p: CardEvent) => void;
   "presence:update": (p: { users: PresenceUser[] }) => void;
-  cursor: (p: { userId: string; x: number; y: number }) => void;
+  cursors: (p: { cursors: { userId: string; x: number; y: number }[] }) => void; // includes the receiver's own; skip it
   "export:ready": (p: { jobId: string; url: string }) => void;
   error: (p: { code: "forbidden" | "bad_request" }) => void;
 }

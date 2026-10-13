@@ -113,7 +113,7 @@ describe("realtime", () => {
     const a = await joined(s1, ids.a);
     const b = await joined(s2, ids.b);
     let received = 0;
-    b.on("cursor", () => received++);
+    b.on("cursors", ({ cursors }) => (received += cursors.filter((c: { userId: string }) => c.userId === ids.a).length));
     // 100 messages inside one second: 10 bursts of 10, on wall-clock ticks (OS timers are coarse).
     const t0 = Date.now();
     for (let tick = 0; tick < 10; tick++) {
@@ -124,5 +124,20 @@ describe("realtime", () => {
     await new Promise((r) => setTimeout(r, 200)); // let in-flight messages land
     expect(received).toBeGreaterThan(0);
     expect(received).toBeLessThanOrEqual(20);
+  });
+
+  it("cursor moves inside one tick arrive as one batch holding only the latest position", async () => {
+    const a = await joined(s1, ids.a);
+    const b = await joined(s2, ids.b);
+    const batches: { userId: string; x: number; y: number }[][] = [];
+    b.on("cursors", ({ cursors }) => batches.push(cursors));
+    for (let x = 0; x < 5; x++) a.emit("cursor", { x, y: 0 });
+    await new Promise((r) => setTimeout(r, 300));
+    // 5 moves, at most 2 batches (if they straddle a tick), each with one entry per user, ending on the latest.
+    expect(batches.length).toBeLessThanOrEqual(2);
+    for (const batch of batches) expect(batch).toHaveLength(1);
+    expect(batches.at(-1)).toEqual([{ userId: ids.a, x: 4, y: 0 }]);
+    a.close();
+    b.close();
   });
 });

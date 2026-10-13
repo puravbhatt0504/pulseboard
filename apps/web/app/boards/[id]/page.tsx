@@ -104,8 +104,14 @@ export default function BoardPage() {
           const present = new Set(users.map((u) => u.id));
           setCursors((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => present.has(id))));
         });
-        socket.on("cursor", ({ userId, x, y }: { userId: string; x: number; y: number }) =>
-          setCursors((prev) => ({ ...prev, [userId]: { x, y } })),
+        // Batches include our own cursor; the access token's `sub` is our user id.
+        const me = JSON.parse(atob(getToken()!.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).sub;
+        socket.on("cursors", ({ cursors: batch }: { cursors: { userId: string; x: number; y: number }[] }) =>
+          setCursors((prev) => {
+            const next = { ...prev };
+            for (const c of batch) if (c.userId !== me) next[c.userId] = { x: c.x, y: c.y };
+            return next;
+          }),
         );
       })
       .catch((e) => {
