@@ -25,9 +25,11 @@ COPY apps/api/package.json apps/api/
 # --omit=optional too: the lockfile marks prisma/typescript/effect "devOptional" (peers of @prisma/client),
 # which --omit=dev alone keeps. The wasm engines are for edge/driver-adapter runtimes; we use the native
 # library engine in .prisma/client (verified: test suite passes with them removed).
+# OpenTelemetry packages ship build/esm and build/esnext copies for bundlers; Node resolves only build/src.
 RUN npm ci -w apps/api --include-workspace-root=false --omit=dev --omit=optional --ignore-scripts \
  && npm rebuild argon2 \
- && rm -f node_modules/@prisma/client/runtime/*wasm*
+ && rm -f node_modules/@prisma/client/runtime/*wasm* \
+ && rm -rf node_modules/@opentelemetry/*/build/esm node_modules/@opentelemetry/*/build/esnext
 
 FROM node:20-alpine AS runtime
 ENV NODE_ENV=production

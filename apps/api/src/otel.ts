@@ -6,19 +6,33 @@ if (process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
   // ESM: auto-instrumentation patches modules through this loader hook, so it must be registered first.
   register("@opentelemetry/instrumentation/hook.mjs", import.meta.url);
 
-  const [{ NodeSDK }, { OTLPTraceExporter }, { HttpInstrumentation }, { ExpressInstrumentation }, { IORedisInstrumentation }, { PrismaInstrumentation }] =
-    await Promise.all([
-      import("@opentelemetry/sdk-node"),
-      import("@opentelemetry/exporter-trace-otlp-http"),
-      import("@opentelemetry/instrumentation-http"),
-      import("@opentelemetry/instrumentation-express"),
-      import("@opentelemetry/instrumentation-ioredis"),
-      import("@prisma/instrumentation"),
-    ]);
+  // sdk-trace-node, not sdk-node: the latter brings gRPC, metrics, logs and zipkin exporters we don't use (image size).
+  const [
+    { NodeTracerProvider, BatchSpanProcessor },
+    { resourceFromAttributes },
+    { registerInstrumentations },
+    { OTLPTraceExporter },
+    { HttpInstrumentation },
+    { ExpressInstrumentation },
+    { IORedisInstrumentation },
+    { PrismaInstrumentation },
+  ] = await Promise.all([
+    import("@opentelemetry/sdk-trace-node"),
+    import("@opentelemetry/resources"),
+    import("@opentelemetry/instrumentation"),
+    import("@opentelemetry/exporter-trace-otlp-http"),
+    import("@opentelemetry/instrumentation-http"),
+    import("@opentelemetry/instrumentation-express"),
+    import("@opentelemetry/instrumentation-ioredis"),
+    import("@prisma/instrumentation"),
+  ]);
 
-  const sdk = new NodeSDK({
-    serviceName: process.env.OTEL_SERVICE_NAME ?? "pulseboard-api",
-    traceExporter: new OTLPTraceExporter(),
+  const provider = new NodeTracerProvider({
+    resource: resourceFromAttributes({ "service.name": process.env.OTEL_SERVICE_NAME ?? "pulseboard-api" }),
+    spanProcessors: [new BatchSpanProcessor(new OTLPTraceExporter())],
+  });
+  provider.register(); // AsyncLocalStorage context + W3C traceparent propagation
+  registerInstrumentations({
     instrumentations: [
       new HttpInstrumentation({ ignoreIncomingRequestHook: (req) => /^(\/api)?\/health/.test(req.url ?? "") }),
       new ExpressInstrumentation(),
@@ -29,6 +43,5 @@ if (process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
       new PrismaInstrumentation(),
     ],
   });
-  sdk.start();
-  process.once("beforeExit", () => void sdk.shutdown());
+  process.once("beforeExit", () => void provider.shutdown());
 }
