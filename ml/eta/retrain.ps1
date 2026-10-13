@@ -1,11 +1,13 @@
 # Weekly ETA retrain (run by the PulseBoard-ETA-Retrain scheduled task). Brings up whatever is down:
 #   Docker Desktop -> RelayQ postgres/redis -> RelayQ API (:3200) -> RelayQ worker -> eta server (:8000),
-# queues ml.retrain, waits for the job to finish, then stops only the processes it started.
+# refreshes the GitHub issues data (keeps the old CSV if that fails), queues ml.retrain, waits for the job,
+# then stops only the processes it started.
 # Exit 1 on any failure; the scheduled task retries (3 times, 30 min apart). Log: ml/eta/retrain.log
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $relayq = if ($env:RELAYQ_DIR) { $env:RELAYQ_DIR } else { 'E:\Projects\relayq' }
 $url = 'http://localhost:3200'
+$repos = 'facebook/react vercel/next.js'  # GitHub repos whose settled issues are the training data
 $log = Join-Path $PSScriptRoot 'retrain.log'
 function Log($m) { "$(Get-Date -Format s) $m" | Add-Content $log }
 function Wait-Until($what, [int]$seconds, [scriptblock]$ok) {
@@ -29,6 +31,21 @@ try {
   }
   if (-not (Run "docker compose --project-directory `"$relayq`" up -d --wait postgres redis")) { throw 'relayq postgres/redis failed to start' }
   if (-not (Run "docker compose --project-directory `"$root`" --profile ml up -d --wait eta")) { throw 'eta server failed to start' }
+
+  # Fresh data: issues that passed the 60-day settle window since last week. The token comes from your gh login at
+  # run time and only lives in this process's environment. Any failure keeps last week's CSV and still retrains.
+  try {
+    $env:GITHUB_TOKEN = & gh auth token 2>$null
+    if (-not $env:GITHUB_TOKEN) { throw 'gh not logged in' }
+    $models = Join-Path $PSScriptRoot 'models'
+    if (Run "docker run --rm -e GITHUB_TOKEN -w /app -v `"${models}:/app/models`" pulseboard-ml-eta python -m eta.github_import $repos --max-pages 50") {
+      Log "data refreshed: $((Import-Csv (Join-Path $models 'data\eta.csv')).Count) rows"
+    } else { throw 'importer failed' }
+  } catch {
+    Log "data refresh skipped ($($_.Exception.Message)); using existing data"
+  } finally {
+    Remove-Item Env:GITHUB_TOKEN -ErrorAction SilentlyContinue
+  }
 
   $tsx = Join-Path $relayq 'node_modules\.bin\tsx.cmd'
   if (-not (Healthy "$url/health")) {
