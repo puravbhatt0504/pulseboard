@@ -1,8 +1,8 @@
 # Render free demo: api + web in one image, one public origin (see PLAN.md, "Free always-on demo").
 # Build context: repo root. Render passes service env vars as build args; only NEXT_PUBLIC_* are used here.
-FROM node:20-alpine
-# argon2 has no musl prebuild
-RUN apk add --no-cache python3 make g++
+# glibc base: argon2 ships a prebuild, so no node-gyp compile (which needs a flaky headers download).
+FROM node:22-slim
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
