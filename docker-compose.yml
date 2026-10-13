@@ -43,5 +43,19 @@ services:
     ports: ["3000:3000"]
     depends_on: [api]
 
+  # ETA model server: docker compose --profile ml up eta  →  http://localhost:8000 (RelayQ: MODEL_SUBSCRIBERS_ETA=http://localhost:8000/reload)
+  # Reads the same host dir RelayQ's trainer writes to (RelayQ TRAINER_MODEL_DIR = <this repo>/ml/eta/models).
+  eta:
+    profiles: [ml]
+    build: ml/eta
+    image: pulseboard-ml-eta
+    command: ["uvicorn", "eta.serve:app", "--host", "0.0.0.0"]
+    environment:
+      RELAYQ_URL: ${RELAYQ_URL:-http://host.docker.internal:3000}
+      RELAYQ_API_KEY: ${RELAYQ_API_KEY:-}
+      WEBHOOK_SECRET: ${RELAYQ_WEBHOOK_SECRET:-}
+    volumes: ["./ml/eta/models:/models"]
+    ports: ["8000:8000"]
+
 volumes:
   pgdata:

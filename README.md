@@ -38,4 +38,4 @@ Synthetic data (assumptions in `ml/eta/eta/simulate.py`), time split (train on t
 | XGBoost (p50 quantile) | **16.70 h** |
 
 The p90 prediction covers 91.8% of test cards.
-Serve: `docker run -p 8000:8000 -e WEBHOOK_SECRET=... -e RELAYQ_URL=... -e RELAYQ_API_KEY=... pulseboard-ml-eta uvicorn eta.serve:app --host 0.0.0.0`, then set RelayQ's `MODEL_SUBSCRIBERS_ETA=http://<host>:8000/reload`.
+Serve: `docker compose --profile ml up eta` (port 8000; reads `ml/eta/models`). In RelayQ set `TRAINER_MODEL_DIR=<this repo>/ml/eta/models` and `MODEL_SUBSCRIBERS_ETA=http://localhost:8000/reload`.

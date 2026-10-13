@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import json
 import os
+from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -18,7 +19,6 @@ from fastapi import FastAPI, HTTPException, Request
 from . import store
 from .features import CardFeatures, from_request, matrix
 
-app = FastAPI(title="pulseboard-eta")
 state: dict = {"bundle": None, "version": None}
 
 def promoted() -> dict | None:
@@ -29,12 +29,19 @@ def promoted() -> dict | None:
     res.raise_for_status()
     return res.json()["promoted"]
 
-@app.on_event("startup")
-def startup() -> None:
+@asynccontextmanager
+async def lifespan(_: FastAPI):
     if os.environ.get("MODEL_URI"):
         state.update(bundle=store.load(os.environ["MODEL_URI"]), version=None)
-    elif os.environ.get("RELAYQ_URL") and (p := promoted()):
-        state.update(bundle=store.load(p["s3Uri"]), version=p["version"])
+    elif os.environ.get("RELAYQ_URL"):
+        try:
+            if p := promoted():
+                state.update(bundle=store.load(p["s3Uri"]), version=p["version"])
+        except Exception as e:  # registry down or unreachable: serve 503s until the next /reload
+            print(f"startup: no model loaded ({e})")
+    yield
+
+app = FastAPI(title="pulseboard-eta", lifespan=lifespan)
 
 @app.get("/health")
 def health() -> dict:
