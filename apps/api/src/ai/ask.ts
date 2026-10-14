@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { AnthropicBedrockMantle } from "@anthropic-ai/bedrock-sdk";
 import type { Deps } from "../app.js";
 import { searchBoard } from "./search.js";
 
@@ -56,7 +57,16 @@ export function extractCitations(text: string, retrieved: Set<string>) {
   return [...new Set(ids)].filter((id) => retrieved.has(id));
 }
 
-let client: Anthropic | undefined;
+// CLAUDE_BEDROCK_REGION set → Claude in Amazon Bedrock, signed with the AWS credential chain (the ECS task role in
+// prod, AWS_PROFILE locally): no API key anywhere. Otherwise the Claude API with ANTHROPIC_API_KEY.
+export const onBedrock = () => !!process.env.CLAUDE_BEDROCK_REGION;
+export const claudeConfigured = () => onBedrock() || !!process.env.ANTHROPIC_API_KEY;
+export const claudeModel = (id: string) => (onBedrock() ? `anthropic.${id}` : id);
+export type Claude = Pick<AnthropicBedrockMantle, "messages" | "beta">;
+export const claudeClient = (): Claude =>
+  onBedrock() ? new AnthropicBedrockMantle({ awsRegion: process.env.CLAUDE_BEDROCK_REGION }) : new Anthropic();
+
+const clients = new Map<boolean, Claude>();
 
 /** Retrieve → prompt → stream the answer through onText. No tools are offered, so card text can only shape text. */
 export async function ask(
@@ -68,16 +78,18 @@ export async function ask(
 ) {
   const started = Date.now();
   const { cards, activity } = await retrieve(deps, boardId, question);
-  client ??= new Anthropic();
+  if (!clients.has(onBedrock())) clients.set(onBedrock(), claudeClient());
+  const client = clients.get(onBedrock())!;
   const stream = client.beta.messages.stream(
     {
-      model: ASK_MODEL,
+      model: claudeModel(ASK_MODEL),
       max_tokens: 2000,
       output_config: { effort: "low" }, // latency-sensitive chat over a dozen short cards
       system: SYSTEM,
       messages: [{ role: "user", content: buildPrompt(cards, activity, question) }],
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default", // a safety decline re-runs on Anthropic's recommended fallback model
+      // A safety decline re-runs on Anthropic's recommended fallback model. Not offered on Bedrock: there a decline
+      // just comes back as refused.
+      ...(onBedrock() ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }),
     },
     { signal },
   );

@@ -11,7 +11,8 @@ const { app, prisma, redis } = makeTestApp();
 // Fake Anthropic Messages API: streams `reply` back as SSE and records each request body.
 let anthropic: Server;
 let reply = "";
-let bodies: { system: string; tools?: unknown; messages: { content: string }[] }[] = [];
+let bodies: { model: string; fallbacks?: string; system: string; tools?: unknown; messages: { content: string }[] }[] = [];
+let lastAuth = "";
 const sse = (type: string, data: object) => `event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`;
 
 const ids = { owner: "", stranger: "", board: "", other: "", col: "", otherCol: "" };
@@ -31,6 +32,7 @@ beforeAll(async () => {
     let raw = "";
     req.on("data", (c) => (raw += c)).on("end", () => {
       bodies.push(JSON.parse(raw));
+      lastAuth = req.headers.authorization ?? String(req.headers["x-api-key"]);
       res.writeHead(200, { "content-type": "text/event-stream" });
       res.write(sse("message_start", { message: { id: "msg_1", type: "message", role: "assistant", model: "claude-sonnet-5-5", content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 100, output_tokens: 0 } } }));
       res.write(sse("content_block_start", { index: 0, content_block: { type: "text", text: "" } }));
@@ -95,6 +97,7 @@ describe("POST /boards/:id/ask", () => {
     expect(evs.at(-1)).toEqual({ event: "done", data: { citations: [vendor], refused: false } });
 
     const [body] = bodies;
+    expect(body).toMatchObject({ model: "claude-sonnet-5-5", fallbacks: "default" });
     expect(body.tools).toBeUndefined();
     expect(body.messages[0].content).toContain(`<card id="${vendor}">`);
     expect(body.messages[0].content).not.toContain(twin);
@@ -119,5 +122,26 @@ describe("POST /boards/:id/ask", () => {
     expect((await ask("what's blocking launch?")).status).toBe(503);
     process.env.ANTHROPIC_API_KEY = "test-key";
     expect(bodies).toHaveLength(0);
+  });
+
+  it("CLAUDE_BEDROCK_REGION → Bedrock: SigV4-signed, anthropic.-prefixed model, no fallbacks", async () => {
+    // Fake test-only AWS keys: the request only goes to the local fake server.
+    Object.assign(process.env, {
+      CLAUDE_BEDROCK_REGION: "ap-south-1",
+      ANTHROPIC_BEDROCK_MANTLE_BASE_URL: process.env.ANTHROPIC_BASE_URL,
+      AWS_ACCESS_KEY_ID: "AKIATESTONLY",
+      AWS_SECRET_ACCESS_KEY: "test-only",
+    });
+    delete process.env.ANTHROPIC_API_KEY; // Bedrock needs no Anthropic key
+    try {
+      reply = "I can't find that on this board.";
+      expect((await ask("anything on bedrock?")).status).toBe(200);
+      expect(bodies[0].model).toBe("anthropic.claude-sonnet-5-5");
+      expect(bodies[0].fallbacks).toBeUndefined();
+      expect(lastAuth).toMatch(/^AWS4-HMAC-SHA256 Credential=AKIATESTONLY\/\d+\/ap-south-1\/bedrock-mantle\//);
+    } finally {
+      for (const k of ["CLAUDE_BEDROCK_REGION", "ANTHROPIC_BEDROCK_MANTLE_BASE_URL", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]) delete process.env[k];
+      process.env.ANTHROPIC_API_KEY = "test-key";
+    }
   });
 });

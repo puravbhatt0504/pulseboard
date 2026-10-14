@@ -4,6 +4,7 @@ import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
+import * as iam from "aws-cdk-lib/aws-iam";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import type { Construct } from "constructs";
@@ -82,6 +83,7 @@ export class AppStack extends Stack {
         S3_BUCKET: data.bucket.bucketName,
         RELAYQ_URL,
         AWS_REGION: this.region,
+        CLAUDE_BEDROCK_REGION: this.region, // "Ask the board" via Claude in Amazon Bedrock, signed with the task role
       },
       secrets: {
         ...dbSecrets,
@@ -96,6 +98,22 @@ export class AppStack extends Stack {
     });
     server.addContainerDependencies({ container: migrate, condition: ecs.ContainerDependencyCondition.SUCCESS });
     data.bucket.grantPut(api.taskRole);
+    // Claude in Amazon Bedrock (Messages API endpoint), this one model only. Shape from the AWS managed policy
+    // AmazonBedrockMantleInferenceAccess; the Marketplace statement lets the first call subscribe to the model.
+    api.taskRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ["bedrock-mantle:CreateInference"],
+        resources: [`arn:aws:bedrock-mantle:${this.region}:${this.account}:project/*`],
+        conditions: { StringEquals: { "bedrock-mantle:Model": "anthropic.claude-sonnet-5-5" } },
+      }),
+    );
+    api.taskRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ["aws-marketplace:Subscribe", "aws-marketplace:ViewSubscriptions"],
+        resources: ["*"],
+        conditions: { StringEquals: { "aws:CalledViaLast": "bedrock-mantle.amazonaws.com" } },
+      }),
+    );
 
     const apiService = new ecs.FargateService(this, "ApiService", {
       cluster,

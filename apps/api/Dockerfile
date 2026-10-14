@@ -35,7 +35,7 @@ RUN npm ci -w apps/api --include-workspace-root=false --omit=dev --omit=optional
  && rm -rf node_modules/@opentelemetry/*/build/esm node_modules/@opentelemetry/*/build/esnext \
  && rm -rf node_modules/@anthropic-ai/sdk/src \
  && find node_modules -type f \( -name '*.map' -o -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' \) -delete \
- && find node_modules/@anthropic-ai/sdk -name '*.js' -exec sh -c 'for f; do [ -f "${f%.js}.mjs" ] && rm "$f"; done' _ {} +
+ && find node_modules/@anthropic-ai/sdk -name '*.js' -exec sh -c 'for f; do if [ -f "${f%.js}.mjs" ]; then rm "$f"; fi; done' _ {} +
 
 FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
