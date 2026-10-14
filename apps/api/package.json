@@ -12,7 +12,8 @@
     "e2e:server": "tsx src/test/e2e-server.ts",
     "eval:dup": "tsx --env-file-if-exists=../../.env eval/dup.ts",
     "eval:search": "tsx --env-file-if-exists=../../.env eval/search.ts",
-    "eval:ask": "tsx --env-file-if-exists=../../.env eval/ask.ts"
+    "eval:ask": "tsx --env-file-if-exists=../../.env eval/ask.ts",
+    "eval:ask:update": "tsx --env-file-if-exists=../../.env eval/ask.ts --update-baseline"
   },
   "devDependencies": {
     "@opentelemetry/context-async-hooks": "^2.12.0",
