@@ -124,7 +124,7 @@ describe("POST /boards/:id/ask", () => {
     expect(bodies).toHaveLength(0);
   });
 
-  it("CLAUDE_BEDROCK_REGION → Bedrock: SigV4-signed, anthropic.-prefixed model, no fallbacks", async () => {
+  it("CLAUDE_BEDROCK_REGION → Bedrock: SigV4-signed, anthropic.claude-sonnet-5, no fallbacks", async () => {
     // Fake test-only AWS keys: the request only goes to the local fake server.
     Object.assign(process.env, {
       CLAUDE_BEDROCK_REGION: "ap-south-1",
@@ -136,7 +136,7 @@ describe("POST /boards/:id/ask", () => {
     try {
       reply = "I can't find that on this board.";
       expect((await ask("anything on bedrock?")).status).toBe(200);
-      expect(bodies[0].model).toBe("anthropic.claude-sonnet-5-5");
+      expect(bodies[0].model).toBe("anthropic.claude-sonnet-5");
       expect(bodies[0].fallbacks).toBeUndefined();
       expect(lastAuth).toMatch(/^AWS4-HMAC-SHA256 Credential=AKIATESTONLY\/\d+\/ap-south-1\/bedrock-mantle\//);
     } finally {

@@ -104,7 +104,7 @@ export class AppStack extends Stack {
       new iam.PolicyStatement({
         actions: ["bedrock-mantle:CreateInference"],
         resources: [`arn:aws:bedrock-mantle:${this.region}:${this.account}:project/*`],
-        conditions: { StringEquals: { "bedrock-mantle:Model": "anthropic.claude-sonnet-5-5" } },
+        conditions: { StringEquals: { "bedrock-mantle:Model": "anthropic.claude-sonnet-5" } },
       }),
     );
     api.taskRole.addToPrincipalPolicy(

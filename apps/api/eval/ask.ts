@@ -1,12 +1,12 @@
 // npm run eval:ask → runs the real ask() pipeline over eval/ask.jsonl against eval/ask-board.jsonl (seeded into a
 // throwaway Postgres) and grades it. Needs ANTHROPIC_API_KEY, or CLAUDE_BEDROCK_REGION + AWS credentials (Bedrock). Embeddings are used if RelayQ answers POST /embed,
-// otherwise retrieval is full-text only (said in the output). Judge: claude-sonnet-5-5 with eval/judge.md.
+// otherwise retrieval is full-text only (said in the output). Judge: the same model as ask(), with eval/judge.md.
 // Exit 1 if a PLAN Phase 11 gate fails or any metric drops > 5 points below eval/baseline.json.
 //   npm run eval:ask -- --update-baseline   → write the measured metrics as the new baseline
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
-import { ask, ASK_MODEL, claudeClient, claudeConfigured, claudeModel, onBedrock } from "../src/ai/ask.js";
+import { ask, askModel, claudeClient, claudeConfigured, claudeModel, onBedrock } from "../src/ai/ask.js";
 import { cardText, textHash, vectorLiteral } from "../src/ai/embed.js";
 import { startPostgres } from "../src/test/pg.js";
 import { embedAll, readJsonl } from "./lib.js";
@@ -21,7 +21,7 @@ const fixture = readJsonl<Fixture>("ask-board.jsonl");
 const cases = readJsonl<Case>("ask.jsonl");
 const baselineUrl = new URL("../../../eval/baseline.json", import.meta.url);
 const rubric = readFileSync(new URL("../../../eval/judge.md", import.meta.url), "utf8");
-const JUDGE_MODEL = "claude-sonnet-5-5";
+const JUDGE_MODEL = askModel();
 const refusedText = (t: string) => /can['’]t find that/i.test(t);
 
 if (!claudeConfigured()) throw new Error("set ANTHROPIC_API_KEY, or CLAUDE_BEDROCK_REGION for Bedrock (root .env or environment)");
@@ -29,12 +29,15 @@ const anthropic = claudeClient();
 
 async function judge(cards: Fixture[], question: string, answer: string, keyToId: Map<string, string>) {
   const evidence = cards.map((c) => `<card id="${keyToId.get(c.key)}">\n${c.title}\n${c.description}\n</card>`).join("\n");
-  // A forced tool call rather than structured outputs: Bedrock doesn't support structured outputs.
+  // A grade tool rather than structured outputs (Bedrock has none), with tool_choice left on auto: Sonnet 5.5 and
+  // later reject a forced tool_choice. The system prompt says to always call it; no call = an error below.
   const res = await anthropic.messages.create({
     model: claudeModel(JUDGE_MODEL),
     max_tokens: 1000,
     output_config: { effort: "low" },
-    system: rubric,
+    system: `${rubric}
+
+Always record your grade by calling the grade tool.`,
     tools: [{
       name: "grade",
       description: "Record the faithfulness grade.",
@@ -44,7 +47,6 @@ async function judge(cards: Fixture[], question: string, answer: string, keyToId
         required: ["score", "reason"],
       },
     }],
-    tool_choice: { type: "tool", name: "grade" },
     messages: [{ role: "user", content: `${evidence || "(no cards retrieved)"}
 
 Question: ${question}
@@ -133,7 +135,7 @@ try {
   };
   const baseline: Partial<typeof metrics> = existsSync(baselineUrl) ? JSON.parse(readFileSync(baselineUrl, "utf8")).ask ?? {} : {};
 
-  console.log(`${cases.length} cases, model ${ASK_MODEL}, judge ${JUDGE_MODEL}, via ${onBedrock() ? "Amazon Bedrock" : "Claude API"}, retrieval: ${retrieval}\n`);
+  console.log(`${cases.length} cases, model ${askModel()}, judge ${JUDGE_MODEL}, via ${onBedrock() ? "Amazon Bedrock" : "Claude API"}, retrieval: ${retrieval}\n`);
   console.log("metric                 value   gate    baseline");
   let ok = true;
   for (const [k, v] of Object.entries(metrics) as [keyof typeof metrics, number][]) {

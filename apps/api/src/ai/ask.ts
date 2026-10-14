@@ -3,8 +3,9 @@ import { AnthropicBedrockMantle } from "@anthropic-ai/bedrock-sdk";
 import type { Deps } from "../app.js";
 import { searchBoard } from "./search.js";
 
-export const ASK_MODEL = process.env.ASK_MODEL ?? "claude-sonnet-5-5";
-const USD_PER_TOKEN = { input: 2 / 1e6, output: 10 / 1e6 }; // claude-sonnet-5-5 list price
+// Sonnet 5 on Bedrock: Sonnet 5.5 is gated there and not enabled for this account. Same $2 / $10 per MTok list price.
+export const askModel = () => process.env.ASK_MODEL ?? (onBedrock() ? "claude-sonnet-5" : "claude-sonnet-5-5");
+const USD_PER_TOKEN = { input: 2 / 1e6, output: 10 / 1e6 };
 export const RETRIEVE_K = 12;
 export const ASK_LIMIT_PER_HOUR = 20;
 export const NOT_FOUND = "I can't find that on this board.";
@@ -82,7 +83,7 @@ export async function ask(
   const client = clients.get(onBedrock())!;
   const stream = client.beta.messages.stream(
     {
-      model: claudeModel(ASK_MODEL),
+      model: claudeModel(askModel()),
       max_tokens: 2000,
       output_config: { effort: "low" }, // latency-sensitive chat over a dozen short cards
       system: SYSTEM,
