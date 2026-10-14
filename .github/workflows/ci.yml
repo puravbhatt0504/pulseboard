@@ -60,6 +60,23 @@ jobs:
         if: failure()
         with: { name: playwright-report, path: apps/web/test-results }
 
+  # Phase 11 gate: "Ask the board" evals on PRs that touch the AI code. Skipped until the ANTHROPIC_API_KEY secret exists.
+  eval-ask:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - id: changed
+        run: echo "ai=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- apps/api/src/ai eval | head -1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        if: steps.changed.outputs.ai != '' && env.ANTHROPIC_API_KEY != ''
+        with: { node-version: 20, cache: npm }
+      - if: steps.changed.outputs.ai != '' && env.ANTHROPIC_API_KEY != ''
+        run: npm ci && npm run eval:ask -w apps/api
+
   images:
     runs-on: ubuntu-latest
     steps:

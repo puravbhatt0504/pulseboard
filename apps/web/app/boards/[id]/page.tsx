@@ -15,6 +15,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { api, ApiError, getToken, refresh, SOCKET_URL } from "@/lib/api";
+import { AskPanel } from "@/components/AskPanel";
 import { CardDescription } from "@/components/CardDescription";
 import { isTmp, replay, tmpId, write } from "@/lib/outbox";
 
@@ -78,6 +79,7 @@ export default function BoardPage() {
   const socketRef = useRef<Socket | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
   const [me, setMe] = useState("");
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<Hit[] | null>(null);
@@ -302,6 +304,9 @@ export default function BoardPage() {
             </ul>
           )}
         </div>
+        <button onClick={() => setAsking((a) => !a)} className="rounded border border-zinc-300 px-3 py-1 text-sm">
+          Ask the board
+        </button>
         <form onSubmit={startExport} className="ml-auto flex items-center gap-2 text-sm">
           <select name="format" aria-label="Export format" className="rounded border border-zinc-300 px-2 py-1" defaultValue="csv">
             <option value="csv">CSV</option>
@@ -344,6 +349,14 @@ export default function BoardPage() {
             </form>
           </div>
         </DndContext>
+        {asking && (
+          <AskPanel
+            boardId={boardId}
+            titles={new Map(board.columns.flatMap((c) => c.cards).map((c) => [c.id, c.title]))}
+            onOpen={setOpenCardId}
+            onClose={() => setAsking(false)}
+          />
+        )}
         {openCard && socket && (
           <aside role="dialog" aria-label="Card" className="fixed inset-y-0 right-0 z-40 w-full max-w-md overflow-y-auto border-l border-zinc-200 bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-start justify-between gap-4">

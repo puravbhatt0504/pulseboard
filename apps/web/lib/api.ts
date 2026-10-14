@@ -27,7 +27,8 @@ export function refresh(): Promise<boolean> {
   return refreshing;
 }
 
-export async function api<T = unknown>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
+/** fetch with the access token and one silent refresh on 401; the raw Response (for streams). */
+export async function apiFetch(path: string, opts: { method?: string; body?: unknown } = {}): Promise<Response> {
   const send = () =>
     fetch(`${API_URL}${path}`, {
       method: opts.method ?? "GET",
@@ -41,6 +42,11 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
   let res = await send();
   // Silent refresh: no token yet (page reload) or expired → refresh once and retry.
   if (res.status === 401 && !path.startsWith("/auth/") && (await refresh())) res = await send();
+  return res;
+}
+
+export async function api<T = unknown>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
+  const res = await apiFetch(path, opts);
   if (!res.ok) throw new ApiError(res.status, (await res.json().catch(() => ({}))).error ?? res.statusText);
   return (res.status === 204 ? undefined : await res.json()) as T;
 }

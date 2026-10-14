@@ -42,7 +42,7 @@ async function vectorHits({ prisma }: Pick<Deps, "prisma">, boardId: string, vec
 }
 
 /** Full-text matches on this board, any query word (OR), best ts_rank first. Same expression as the Card_fts index. */
-function textHits({ prisma }: Pick<Deps, "prisma">, boardId: string, q: string) {
+function textHits({ prisma }: Pick<Deps, "prisma">, boardId: string, q: string, limit = TOP_K) {
   return prisma.$queryRaw<Hit[]>`
     WITH query AS (SELECT replace(plainto_tsquery('english', ${q})::text, '&', '|')::tsquery AS tsq)
     SELECT c."id" AS "cardId", c."title"
@@ -50,7 +50,7 @@ function textHits({ prisma }: Pick<Deps, "prisma">, boardId: string, q: string) 
     WHERE col."boardId" = ${boardId} AND query.tsq <> ''::tsquery
       AND to_tsvector('english', c."title" || ' ' || c."description") @@ query.tsq
     ORDER BY ts_rank(to_tsvector('english', c."title" || ' ' || c."description"), query.tsq) DESC
-    LIMIT ${TOP_K}`;
+    LIMIT ${limit}`;
 }
 
 /**
@@ -58,13 +58,15 @@ function textHits({ prisma }: Pick<Deps, "prisma">, boardId: string, q: string) 
  * (RelayQ/provider down) it degrades to full-text only. `mode` exists for the eval (hybrid vs vector-only).
  * Callers check membership first.
  */
-export async function searchBoard(deps: Pick<Deps, "prisma">, boardId: string, q: string, mode: "hybrid" | "vector" | "text" = "hybrid") {
+export async function searchBoard(
+  deps: Pick<Deps, "prisma">, boardId: string, q: string, mode: "hybrid" | "vector" | "text" = "hybrid", limit = TOP_K,
+) {
   const vector = mode === "text" ? null : (await embedNow([q]))?.[0];
   const [vec, text] = await Promise.all([
-    vector ? vectorHits(deps, boardId, vector) : [],
-    mode === "vector" ? [] : textHits(deps, boardId, q),
+    vector ? vectorHits(deps, boardId, vector, limit) : [],
+    mode === "vector" ? [] : textHits(deps, boardId, q, limit),
   ]);
-  return rrf([vec.map(({ cardId, title }) => ({ cardId, title })), text]).slice(0, TOP_K);
+  return rrf([vec.map(({ cardId, title }) => ({ cardId, title })), text]).slice(0, limit);
 }
 
 /** Existing cards on this board that a new card's text is at least DUP_THRESHOLD similar to (best first, ≤ 5). */
