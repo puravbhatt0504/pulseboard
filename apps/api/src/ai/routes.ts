@@ -6,6 +6,7 @@ import { h, HttpError } from "../http.js";
 import { verifyRelayqSignature } from "../jobs/relayq.js";
 import { ask, ASK_LIMIT_PER_HOUR } from "./ask.js";
 import { llmConfigured } from "./llm.js";
+import { decideTriage, getTriage, TRIAGE_FIELDS, triageStats, type TriageField } from "./triage.js";
 import { storeEmbeddings } from "./embed.js";
 import { findSimilar, searchBoard } from "./search.js";
 
@@ -62,6 +63,23 @@ data: ${JSON.stringify(data)}
     if (!verifyRelayqSignature(req.rawBody, req.headers["x-relayq-signature"])) throw new HttpError(401, "bad signature");
     await storeEmbeddings(deps, req.body?.items);
     res.status(204).end();
+  }));
+
+  // AI triage: suggestions are only ever applied one field at a time, by a member.
+  r.get("/cards/:id/triage", requireAuth, h(async (req, res) => {
+    res.json(await getTriage(deps, req.userId, req.params.id));
+  }));
+
+  r.post("/cards/:id/triage/feedback", requireAuth, h(async (req, res) => {
+    const { field, accepted } = req.body ?? {};
+    if (!TRIAGE_FIELDS.includes(field) || typeof accepted !== "boolean") {
+      throw new HttpError(400, `field must be one of ${TRIAGE_FIELDS.join(", ")} and accepted a boolean`);
+    }
+    res.json(await decideTriage(deps, req.userId, req.params.id, field as TriageField, accepted));
+  }));
+
+  r.get("/boards/:id/ai/stats", requireAuth, h(async (req, res) => {
+    res.json(await triageStats(deps, req.userId, req.params.id));
   }));
 
   return r;

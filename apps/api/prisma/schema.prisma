@@ -18,6 +18,7 @@ model User {
   refreshTokens RefreshToken[]
   memberships   BoardMember[]
   activities    Activity[]
+  assignedCards Card[]         @relation("CardAssignee")
 }
 
 model RefreshToken {
@@ -38,13 +39,16 @@ enum Role {
 }
 
 model Board {
-  id         String        @id @default(cuid())
+  id         String           @id @default(cuid())
   title      String
-  createdAt  DateTime      @default(now())
+  createdAt  DateTime         @default(now())
   members    BoardMember[]
   columns    Column[]
   activities Activity[]
   exports    Export[]
+  // The labels cards on this board may carry (and that AI triage may suggest).
+  labels     String[]         @default(["bug", "feature", "docs", "chore"])
+  feedback   TriageFeedback[]
 }
 
 model BoardMember {
@@ -70,16 +74,21 @@ model Column {
 }
 
 model Card {
-  id          String         @id @default(cuid())
+  id          String            @id @default(cuid())
   columnId    String
   title       String
-  description String         @default("")
+  description String            @default("")
   position    String
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  column      Column         @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  column      Column            @relation(fields: [columnId], references: [id], onDelete: Cascade)
   doc         CardDoc?
   embedding   CardEmbedding?
+  labels      String[]          @default([])
+  priority    String? // low | medium | high | urgent
+  assigneeId  String?
+  assignee    User?             @relation("CardAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  triage      TriageSuggestion?
 
   @@index([columnId, position])
 }
@@ -131,4 +140,31 @@ model CardEmbedding {
   model       String
   updatedAt   DateTime                    @updatedAt
   card        Card                        @relation(fields: [cardId], references: [id], onDelete: Cascade)
+}
+
+// AI triage (Phase 12): the validated suggestion for a new card. Never applied until a member accepts a field.
+model TriageSuggestion {
+  cardId     String   @id
+  labels     String[]
+  priority   String?
+  assigneeId String?
+  reason     String
+  model      String
+  createdAt  DateTime @default(now())
+  card       Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+}
+
+// One accept/reject per card and field (labels | priority | assignee). No FK to Card: stats outlive deleted cards.
+model TriageFeedback {
+  id        String   @id @default(cuid())
+  boardId   String
+  cardId    String
+  userId    String
+  field     String
+  accepted  Boolean
+  createdAt DateTime @default(now())
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@unique([cardId, field])
+  @@index([boardId])
 }

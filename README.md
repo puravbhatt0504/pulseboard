@@ -78,6 +78,19 @@ Measured 2026-10-15, `zai.glm-5` on Bedrock answering **and** judging, retrieval
 
 The 4 misses are all false refusals ("I can't find that…" when a card did answer), never a wrong citation. The same model grades its own answers, which is a known bias. `eval/baseline.json` holds these numbers; a later run fails if any metric drops more than 5 points.
 
+## AI triage (suggested labels, priority, assignee)
+
+When a card is created, `src/ai/triage.ts` asks the same model as "Ask the board" (`src/ai/llm.ts`; prod: `zai.glm-5` on Bedrock) for `{labels, priority, assigneeId, reason}` as JSON. Every field is validated with zod against the board: a label not in the board's list, a priority outside low/medium/high/urgent, or an assignee who isn't a member is dropped, and the rest is kept. Nothing is applied automatically. The card panel shows each suggested field as a chip; clicking it applies that one field (`POST /cards/:id/triage/feedback {field, accepted}`), ✕ rejects it. Each decision is logged once per card and field (`TriageFeedback`), and `GET /boards/:id/ai/stats` returns the acceptance rate per field.
+
+Eval data is real: 100 kubernetes/kubernetes issues whose maintainers set `priority/*` and `kind/*` labels (`node eval/build-triage.mjs`; 25 per priority, so always guessing "medium" scores 0.25). Measured 2026-10-15 with `zai.glm-5`, `npm run eval:triage -w apps/api`:
+
+| metric | value |
+|---|---:|
+| label F1 (micro) | 0.734 (precision 0.604, recall 0.935) |
+| priority accuracy | **0.420** (always "medium": 0.250) |
+
+The model over-calls "high": 16 of 25 "low" and 17 of 25 "urgent" issues were predicted "high". It also adds labels too freely (precision 0.60). The numbers are in `eval/baseline.json`; a later run fails if one drops more than 5 points.
+
 ## Load test
 
 `load/board.k6.js`: N users across 10 boards, each with a socket sending cursor updates at 10/s and one card move every 5 s.
@@ -131,4 +144,4 @@ The p90 prediction covers 91.8% of test cards.
 | XGBoost (p50 quantile) | **380 h** |
 
 The p90 prediction covers 87% of test issues. Errors are large because the data has two humps: the typical issue closes in about 5 h, while a third of them run past 60 days.
-Serve: `docker compose --profile ml up eta` (port 8000; reads `ml/eta/models`). In RelayQ set `TRAINER_MODEL_DIR=<this repo>/ml/eta/models` and `MODEL_SUBSCRIBERS_ETA=http://localhost:8000/reload`.
+Serve: `docker compose --profile ml up eta` (port 8000; reads `ml/eta/models`). The API calls it when `ETA_URL` is set (e.g. `http://localhost:8000`): `GET /cards/:id/eta` builds the features from the card (`src/cards/eta.ts`: column from its title, bug/feature/chore labels plus "urgent" priority, board and assignee median hours to Done from the activity log, open cards for the assignee; comments and checklists are 0 because cards have none yet) and the card panel shows "usually ~N days". Cards in a Done column get no estimate; without `ETA_URL` the line is hidden. Not deployed on AWS yet. In RelayQ set `TRAINER_MODEL_DIR=<this repo>/ml/eta/models` and `MODEL_SUBSCRIBERS_ETA=http://localhost:8000/reload`.

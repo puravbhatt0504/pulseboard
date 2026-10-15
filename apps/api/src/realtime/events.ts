@@ -13,6 +13,7 @@ export interface ServerToClient {
   "presence:update": (p: { users: PresenceUser[] }) => void;
   cursors: (p: { cursors: { userId: string; x: number; y: number }[] }) => void; // includes the receiver's own; skip it
   "export:ready": (p: { jobId: string; url: string }) => void;
+  "card:triage": (p: { cardId: string }) => void; // a triage suggestion is ready: GET /cards/:id/triage
   error: (p: { code: "forbidden" | "bad_request" }) => void;
   "doc:update": (p: { cardId: string; update: Uint8Array }) => void;
   "doc:awareness": (p: { cardId: string; update: Uint8Array }) => void; // y-protocols awareness (editor carets)

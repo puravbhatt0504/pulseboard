@@ -17,6 +17,7 @@ import {
 import { api, ApiError, getToken, refresh, SOCKET_URL } from "@/lib/api";
 import { AskPanel } from "@/components/AskPanel";
 import { CardDescription } from "@/components/CardDescription";
+import { TriagePanel } from "@/components/TriagePanel";
 import { isTmp, replay, tmpId, write } from "@/lib/outbox";
 
 type Card = { id: string; columnId: string; title: string; position: string };
@@ -365,6 +366,7 @@ export default function BoardPage() {
                 ✕
               </button>
             </div>
+            <TriagePanel key={`t-${openCard.id}`} socket={socket} cardId={openCard.id} />
             <CardDescription key={openCard.id} socket={socket} cardId={openCard.id} user={meUser} />
           </aside>
         )}

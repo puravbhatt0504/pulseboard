@@ -5,5 +5,9 @@
     "unanswerable_refused": 1,
     "injection_pass": 1,
     "faithfulness": 4.928571428571429
+  },
+  "triage": {
+    "label_f1": 0.7341772151898733,
+    "priority_accuracy": 0.42
   }
 }

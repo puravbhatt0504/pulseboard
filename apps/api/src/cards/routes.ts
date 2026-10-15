@@ -6,6 +6,8 @@ import { cardBoard, createCard, updateCard } from "./service.js";
 import { presignAttachment } from "../uploads/s3.js";
 import { emitCard } from "../realtime/events.js";
 import { scheduleEmbed } from "../ai/embed.js";
+import { triageCard } from "../ai/triage.js";
+import { cardEta } from "./eta.js";
 
 const optional = (v: unknown, field: string, max: number) => (v === undefined ? undefined : requireString(v, field, max));
 
@@ -23,6 +25,7 @@ export function cardsRouter(deps: Deps) {
     const { card, boardId } = await createCard(deps, req.userId, req.params.id, title, description(req.body?.description));
     emitCard(deps.io, boardId, "card:created", card, req.userId);
     void scheduleEmbed(deps, card.id).catch(console.error);
+    void triageCard(deps, card.id).catch(console.error);
     res.status(201).json(card);
   }));
 
@@ -43,6 +46,10 @@ export function cardsRouter(deps: Deps) {
     emitCard(deps.io, boardId, moved ? "card:moved" : "card:updated", card, req.userId);
     if (b.title !== undefined || b.description !== undefined) void scheduleEmbed(deps, card.id).catch(console.error);
     res.json(card);
+  }));
+
+  r.get("/cards/:id/eta", requireAuth, h(async (req, res) => {
+    res.json(await cardEta(deps, req.userId, req.params.id));
   }));
 
   r.post("/cards/:id/attachments/presign", requireAuth, h(async (req, res) => {
