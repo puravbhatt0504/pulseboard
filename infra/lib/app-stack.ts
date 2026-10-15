@@ -14,6 +14,9 @@ type Props = StackProps & { data: DataStack; imageTag: string };
 
 // RelayQ's always-on HTTPS deployment (its AWS stack is HTTP-only and time-boxed).
 const RELAYQ_URL = "https://relayq-demo.onrender.com";
+// "Ask the board" model on Amazon Bedrock. Claude (any version), GLM 5.3 and Nemotron Super were refused or hung
+// for this account on 2026-10-15; GLM 5 answers.
+const ASK_BEDROCK_MODEL = "zai.glm-5";
 
 // Stateless compute: ALB + Fargate services + CloudFront. Redeployed by CI on every push to main.
 export class AppStack extends Stack {
@@ -83,7 +86,7 @@ export class AppStack extends Stack {
         S3_BUCKET: data.bucket.bucketName,
         RELAYQ_URL,
         AWS_REGION: this.region,
-        CLAUDE_BEDROCK_REGION: this.region, // "Ask the board" via Claude in Amazon Bedrock, signed with the task role
+        ASK_BEDROCK_MODEL, // "Ask the board" via Amazon Bedrock Converse, signed with the task role
       },
       secrets: {
         ...dbSecrets,
@@ -98,20 +101,11 @@ export class AppStack extends Stack {
     });
     server.addContainerDependencies({ container: migrate, condition: ecs.ContainerDependencyCondition.SUCCESS });
     data.bucket.grantPut(api.taskRole);
-    // Claude in Amazon Bedrock (Messages API endpoint), this one model only. Shape from the AWS managed policy
-    // AmazonBedrockMantleInferenceAccess; the Marketplace statement lets the first call subscribe to the model.
+    // Bedrock Converse (ConverseStream = InvokeModelWithResponseStream) on this one model only.
     api.taskRole.addToPrincipalPolicy(
       new iam.PolicyStatement({
-        actions: ["bedrock-mantle:CreateInference"],
-        resources: [`arn:aws:bedrock-mantle:${this.region}:${this.account}:project/*`],
-        conditions: { StringEquals: { "bedrock-mantle:Model": "anthropic.claude-sonnet-5" } },
-      }),
-    );
-    api.taskRole.addToPrincipalPolicy(
-      new iam.PolicyStatement({
-        actions: ["aws-marketplace:Subscribe", "aws-marketplace:ViewSubscriptions"],
-        resources: ["*"],
-        conditions: { StringEquals: { "aws:CalledViaLast": "bedrock-mantle.amazonaws.com" } },
+        actions: ["bedrock:InvokeModelWithResponseStream"],
+        resources: [`arn:aws:bedrock:${this.region}::foundation-model/${ASK_BEDROCK_MODEL}`],
       }),
     );
 

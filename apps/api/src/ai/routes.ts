@@ -4,7 +4,8 @@ import { requireAuth } from "../auth/middleware.js";
 import { requireRole } from "../boards/service.js";
 import { h, HttpError } from "../http.js";
 import { verifyRelayqSignature } from "../jobs/relayq.js";
-import { ask, ASK_LIMIT_PER_HOUR, claudeConfigured } from "./ask.js";
+import { ask, ASK_LIMIT_PER_HOUR } from "./ask.js";
+import { llmConfigured } from "./llm.js";
 import { storeEmbeddings } from "./embed.js";
 import { findSimilar, searchBoard } from "./search.js";
 
@@ -33,7 +34,7 @@ export function aiRouter(deps: Deps) {
   r.post("/boards/:id/ask", requireAuth, h(async (req, res) => {
     await requireRole(deps, req.params.id, req.userId, false);
     const question = text(req.body?.question, "question", 500);
-    if (!claudeConfigured()) throw new HttpError(503, "ask is not configured");
+    if (!llmConfigured()) throw new HttpError(503, "ask is not configured");
     const key = `ratelimit:ask:${req.userId}`;
     const used = await deps.redis.incr(key);
     if (used === 1) await deps.redis.expire(key, 3600);

@@ -1,12 +1,13 @@
 // npm run eval:ask → runs the real ask() pipeline over eval/ask.jsonl against eval/ask-board.jsonl (seeded into a
-// throwaway Postgres) and grades it. Needs ANTHROPIC_API_KEY, or CLAUDE_BEDROCK_REGION + AWS credentials (Bedrock). Embeddings are used if RelayQ answers POST /embed,
+// throwaway Postgres) and grades it. Needs ASK_BEDROCK_MODEL + AWS credentials (Bedrock), or ANTHROPIC_API_KEY. Embeddings are used if RelayQ answers POST /embed,
 // otherwise retrieval is full-text only (said in the output). Judge: the same model as ask(), with eval/judge.md.
 // Exit 1 if a PLAN Phase 11 gate fails or any metric drops > 5 points below eval/baseline.json.
 //   npm run eval:ask -- --update-baseline   → write the measured metrics as the new baseline
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
-import { ask, askModel, claudeClient, claudeConfigured, claudeModel, onBedrock } from "../src/ai/ask.js";
+import { ask } from "../src/ai/ask.js";
+import { generate, llmConfigured, llmName } from "../src/ai/llm.js";
 import { cardText, textHash, vectorLiteral } from "../src/ai/embed.js";
 import { startPostgres } from "../src/test/pg.js";
 import { embedAll, readJsonl } from "./lib.js";
@@ -21,41 +22,28 @@ const fixture = readJsonl<Fixture>("ask-board.jsonl");
 const cases = readJsonl<Case>("ask.jsonl");
 const baselineUrl = new URL("../../../eval/baseline.json", import.meta.url);
 const rubric = readFileSync(new URL("../../../eval/judge.md", import.meta.url), "utf8");
-const JUDGE_MODEL = askModel();
 const refusedText = (t: string) => /can['’]t find that/i.test(t);
 
-if (!claudeConfigured()) throw new Error("set ANTHROPIC_API_KEY, or CLAUDE_BEDROCK_REGION for Bedrock (root .env or environment)");
-const anthropic = claudeClient();
+if (!llmConfigured()) throw new Error("set ASK_BEDROCK_MODEL (Bedrock) or ANTHROPIC_API_KEY (root .env or environment)");
 
 async function judge(cards: Fixture[], question: string, answer: string, keyToId: Map<string, string>) {
   const evidence = cards.map((c) => `<card id="${keyToId.get(c.key)}">\n${c.title}\n${c.description}\n</card>`).join("\n");
-  // A grade tool rather than structured outputs (Bedrock has none), with tool_choice left on auto: Sonnet 5.5 and
-  // later reject a forced tool_choice. The system prompt says to always call it; no call = an error below.
-  const res = await anthropic.messages.create({
-    model: claudeModel(JUDGE_MODEL),
-    max_tokens: 1000,
-    output_config: { effort: "low" },
+  // Plain JSON in the reply: works on every model (tool and structured-output support vary across Bedrock models).
+  const res = await generate({
     system: `${rubric}
 
-Always record your grade by calling the grade tool.`,
-    tools: [{
-      name: "grade",
-      description: "Record the faithfulness grade.",
-      input_schema: {
-        type: "object",
-        properties: { score: { type: "integer", enum: [1, 2, 3, 4, 5] }, reason: { type: "string" } },
-        required: ["score", "reason"],
-      },
-    }],
-    messages: [{ role: "user", content: `${evidence || "(no cards retrieved)"}
+Reply with only a JSON object: {"score": <1-5>, "reason": "<one sentence>"}`,
+    prompt: `${evidence || "(no cards retrieved)"}
 
 Question: ${question}
 
-Answer: ${answer}` }],
+Answer: ${answer}`,
+    maxTokens: 4000,
   });
-  if (res.stop_reason === "refusal") return null;
-  const grade = res.content.find((b) => b.type === "tool_use")?.input as { score?: unknown; reason?: unknown } | undefined;
-  if (!grade || ![1, 2, 3, 4, 5].includes(grade.score as number)) throw new Error(`judge returned no valid grade: ${JSON.stringify(res.content)}`);
+  if (res.refused) return null;
+  const json = res.text.match(/\{[^{}]*"score"[^{}]*\}/g)?.at(-1);
+  const grade = json ? (JSON.parse(json) as { score?: unknown; reason?: unknown }) : undefined;
+  if (!grade || ![1, 2, 3, 4, 5].includes(grade.score as number)) throw new Error(`judge returned no valid grade: ${res.text.slice(0, 300)}`);
   return grade as { score: number; reason: string };
 }
 
@@ -135,7 +123,7 @@ try {
   };
   const baseline: Partial<typeof metrics> = existsSync(baselineUrl) ? JSON.parse(readFileSync(baselineUrl, "utf8")).ask ?? {} : {};
 
-  console.log(`${cases.length} cases, model ${askModel()}, judge ${JUDGE_MODEL}, via ${onBedrock() ? "Amazon Bedrock" : "Claude API"}, retrieval: ${retrieval}\n`);
+  console.log(`${cases.length} cases, model and judge ${llmName()}, retrieval: ${retrieval}\n`);
   console.log("metric                 value   gate    baseline");
   let ok = true;
   for (const [k, v] of Object.entries(metrics) as [keyof typeof metrics, number][]) {

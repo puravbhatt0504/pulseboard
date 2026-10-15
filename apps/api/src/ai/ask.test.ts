@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createServer, type Server } from "node:http";
+import { createServer as createHttp2Server } from "node:http2";
 import type { AddressInfo } from "node:net";
 import request from "supertest";
 import { makeTestApp, uniqueEmail } from "../test/harness.js";
 import { signAccess } from "../auth/jwt.js";
+import { EventStreamCodec } from "@smithy/core/event-streams"; // test-only: frames for the fake Bedrock stream
 import { extractCitations } from "./ask.js";
 
 const { app, prisma, redis } = makeTestApp();
@@ -12,7 +14,6 @@ const { app, prisma, redis } = makeTestApp();
 let anthropic: Server;
 let reply = "";
 let bodies: { model: string; fallbacks?: string; system: string; tools?: unknown; messages: { content: string }[] }[] = [];
-let lastAuth = "";
 const sse = (type: string, data: object) => `event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`;
 
 const ids = { owner: "", stranger: "", board: "", other: "", col: "", otherCol: "" };
@@ -32,7 +33,6 @@ beforeAll(async () => {
     let raw = "";
     req.on("data", (c) => (raw += c)).on("end", () => {
       bodies.push(JSON.parse(raw));
-      lastAuth = req.headers.authorization ?? String(req.headers["x-api-key"]);
       res.writeHead(200, { "content-type": "text/event-stream" });
       res.write(sse("message_start", { message: { id: "msg_1", type: "message", role: "assistant", model: "claude-sonnet-5-5", content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 100, output_tokens: 0 } } }));
       res.write(sse("content_block_start", { index: 0, content_block: { type: "text", text: "" } }));
@@ -124,23 +124,59 @@ describe("POST /boards/:id/ask", () => {
     expect(bodies).toHaveLength(0);
   });
 
-  it("CLAUDE_BEDROCK_REGION → Bedrock: SigV4-signed, anthropic.claude-sonnet-5, no fallbacks", async () => {
+  it("ASK_BEDROCK_MODEL → Bedrock Converse: SigV4-signed, streams text, skips reasoning, keeps citations", async () => {
+    const vendor = await card(ids.col, "Bedrock vendor card", "Waiting on the vendor.");
+    // Fake Bedrock runtime: answers ConverseStream with AWS event-stream frames.
+    const codec = new EventStreamCodec((b) => new TextDecoder().decode(b), (s) => new TextEncoder().encode(s));
+    const frame = (type: string, body: object) =>
+      codec.encode({
+        headers: {
+          ":event-type": { type: "string", value: type },
+          ":message-type": { type: "string", value: "event" },
+          ":content-type": { type: "string", value: "application/json" },
+        },
+        body: new TextEncoder().encode(JSON.stringify(body)),
+      });
+    let seen: { url?: string; auth?: string; body?: { system: { text: string }[]; toolConfig?: unknown } } = {};
+    const fake = createHttp2Server((req, res) => { // the Bedrock runtime client streams over HTTP/2
+      let raw = "";
+      req.on("data", (c) => (raw += c)).on("end", () => {
+        seen = { url: req.url, auth: String(req.headers.authorization), body: JSON.parse(raw) };
+        res.writeHead(200, { "content-type": "application/vnd.amazon.eventstream" });
+        res.flushHeaders();
+        res.write(frame("messageStart", { role: "assistant" }));
+        res.write(frame("contentBlockDelta", { contentBlockIndex: 0, delta: { reasoningContent: { text: "thinking..." } } }));
+        res.write(frame("contentBlockDelta", { contentBlockIndex: 1, delta: { text: "Blocked on the vendor " } }));
+        res.write(frame("contentBlockDelta", { contentBlockIndex: 1, delta: { text: `[card:${vendor}].` } }));
+        res.write(frame("messageStop", { stopReason: "end_turn" }));
+        res.end(frame("metadata", { usage: { inputTokens: 50, outputTokens: 9, totalTokens: 59 }, metrics: { latencyMs: 5 } }));
+      });
+    });
+    await new Promise<void>((r) => fake.listen(0, r));
     // Fake test-only AWS keys: the request only goes to the local fake server.
-    Object.assign(process.env, {
-      CLAUDE_BEDROCK_REGION: "ap-south-1",
-      ANTHROPIC_BEDROCK_MANTLE_BASE_URL: process.env.ANTHROPIC_BASE_URL,
+    const env = {
+      ASK_BEDROCK_MODEL: "zai.glm-test",
+      AWS_ENDPOINT_URL_BEDROCK_RUNTIME: `http://localhost:${(fake.address() as AddressInfo).port}`,
+      AWS_REGION: "ap-south-1",
       AWS_ACCESS_KEY_ID: "AKIATESTONLY",
       AWS_SECRET_ACCESS_KEY: "test-only",
-    });
+    };
+    Object.assign(process.env, env);
     delete process.env.ANTHROPIC_API_KEY; // Bedrock needs no Anthropic key
     try {
-      reply = "I can't find that on this board.";
-      expect((await ask("anything on bedrock?")).status).toBe(200);
-      expect(bodies[0].model).toBe("anthropic.claude-sonnet-5");
-      expect(bodies[0].fallbacks).toBeUndefined();
-      expect(lastAuth).toMatch(/^AWS4-HMAC-SHA256 Credential=AKIATESTONLY\/\d+\/ap-south-1\/bedrock-mantle\//);
+      const res = await ask("what blocks the vendor?");
+      expect(res.status).toBe(200);
+      const evs = events(res.text);
+      expect(evs.filter((e) => e.event === "token").map((e) => e.data.text).join("")).toBe(`Blocked on the vendor [card:${vendor}].`);
+      expect(evs.at(-1)).toEqual({ event: "done", data: { citations: [vendor], refused: false } });
+      expect(seen.url).toBe("/model/zai.glm-test/converse-stream");
+      expect(seen.auth).toMatch(/^AWS4-HMAC-SHA256 Credential=AKIATESTONLY\/\d+\/ap-south-1\/bedrock\//);
+      expect(seen.body?.system[0].text).toContain("I can't find that on this board.");
+      expect(seen.body?.toolConfig).toBeUndefined();
+      expect(bodies).toHaveLength(0); // nothing went to the Anthropic API
     } finally {
-      for (const k of ["CLAUDE_BEDROCK_REGION", "ANTHROPIC_BEDROCK_MANTLE_BASE_URL", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]) delete process.env[k];
+      fake.close();
+      for (const k of Object.keys(env)) delete process.env[k];
       process.env.ANTHROPIC_API_KEY = "test-key";
     }
   });

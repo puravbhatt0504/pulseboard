@@ -1,11 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { AnthropicBedrockMantle } from "@anthropic-ai/bedrock-sdk";
 import type { Deps } from "../app.js";
+import { generate } from "./llm.js";
 import { searchBoard } from "./search.js";
 
-// Sonnet 5 on Bedrock: Sonnet 5.5 is gated there and not enabled for this account. Same $2 / $10 per MTok list price.
-export const askModel = () => process.env.ASK_MODEL ?? (onBedrock() ? "claude-sonnet-5" : "claude-sonnet-5-5");
-const USD_PER_TOKEN = { input: 2 / 1e6, output: 10 / 1e6 };
 export const RETRIEVE_K = 12;
 export const ASK_LIMIT_PER_HOUR = 20;
 export const NOT_FOUND = "I can't find that on this board.";
@@ -58,17 +54,6 @@ export function extractCitations(text: string, retrieved: Set<string>) {
   return [...new Set(ids)].filter((id) => retrieved.has(id));
 }
 
-// CLAUDE_BEDROCK_REGION set → Claude in Amazon Bedrock, signed with the AWS credential chain (the ECS task role in
-// prod, AWS_PROFILE locally): no API key anywhere. Otherwise the Claude API with ANTHROPIC_API_KEY.
-export const onBedrock = () => !!process.env.CLAUDE_BEDROCK_REGION;
-export const claudeConfigured = () => onBedrock() || !!process.env.ANTHROPIC_API_KEY;
-export const claudeModel = (id: string) => (onBedrock() ? `anthropic.${id}` : id);
-export type Claude = Pick<AnthropicBedrockMantle, "messages" | "beta">;
-export const claudeClient = (): Claude =>
-  onBedrock() ? new AnthropicBedrockMantle({ awsRegion: process.env.CLAUDE_BEDROCK_REGION }) : new Anthropic();
-
-const clients = new Map<boolean, Claude>();
-
 /** Retrieve → prompt → stream the answer through onText. No tools are offered, so card text can only shape text. */
 export async function ask(
   deps: Pick<Deps, "prisma">,
@@ -79,29 +64,14 @@ export async function ask(
 ) {
   const started = Date.now();
   const { cards, activity } = await retrieve(deps, boardId, question);
-  if (!clients.has(onBedrock())) clients.set(onBedrock(), claudeClient());
-  const client = clients.get(onBedrock())!;
-  const stream = client.beta.messages.stream(
-    {
-      model: claudeModel(askModel()),
-      max_tokens: 2000,
-      output_config: { effort: "low" }, // latency-sensitive chat over a dozen short cards
-      system: SYSTEM,
-      messages: [{ role: "user", content: buildPrompt(cards, activity, question) }],
-      // A safety decline re-runs on Anthropic's recommended fallback model. Not offered on Bedrock: there a decline
-      // just comes back as refused.
-      ...(onBedrock() ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }),
-    },
-    { signal },
-  );
-  stream.on("text", onText);
-  const message = await stream.finalMessage();
-  const text = message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-  const refused = message.stop_reason === "refusal";
+  const { text, refused, inputTokens, outputTokens, costUsd } = await generate({
+    system: SYSTEM,
+    prompt: buildPrompt(cards, activity, question),
+    maxTokens: 4000, // room for reasoning models' thinking before the short answer
+    onText,
+    signal,
+  });
   const citations = refused ? [] : extractCitations(text, new Set(cards.map((c) => c.id)));
-  const { input_tokens: inputTokens, output_tokens: outputTokens } = message.usage;
-  // ponytail: priced at Sonnet rates even when a fallback model answered; use usage.iterations if that matters.
-  const costUsd = inputTokens * USD_PER_TOKEN.input + outputTokens * USD_PER_TOKEN.output;
   console.log(JSON.stringify({ msg: "ask", boardId, latencyMs: Date.now() - started, inputTokens, outputTokens, costUsd, refused }));
   return { text, citations, refused, retrieved: cards.map((c) => c.id) };
 }

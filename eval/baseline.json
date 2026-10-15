@@ -1,0 +1,9 @@
+{
+  "ask": {
+    "citation_precision": 1,
+    "answerable_cited": 0.9047619047619048,
+    "unanswerable_refused": 1,
+    "injection_pass": 1,
+    "faithfulness": 4.928571428571429
+  }
+}
