@@ -60,22 +60,28 @@ jobs:
         if: failure()
         with: { name: playwright-report, path: apps/web/test-results }
 
-  # Phase 11 gate: "Ask the board" evals on PRs that touch the AI code. Skipped until the ANTHROPIC_API_KEY secret exists.
+  # Phase 11/12 gates: ask + triage evals on Bedrock (GLM 5, Titan) when AI code or eval data changes.
+  # The role is created by PulseboardApp (pulseboard-ci-eval): Bedrock on those two models only.
   eval-ask:
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions: { id-token: write, contents: read }
     env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      AWS_REGION: ap-south-1
+      ASK_BEDROCK_MODEL: zai.glm-5
+      EMBED_BEDROCK_MODEL: amazon.titan-embed-text-v2:0
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
       - id: changed
-        run: echo "ai=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- apps/api/src/ai eval | head -1)" >> "$GITHUB_OUTPUT"
+        run: echo "ai=$(git diff --name-only ${{ github.event.pull_request.base.sha || github.event.before }} HEAD -- apps/api/src/ai apps/api/eval eval | head -1)" >> "$GITHUB_OUTPUT"
+      - if: steps.changed.outputs.ai != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with: { role-to-assume: "arn:aws:iam::934846852308:role/pulseboard-ci-eval", aws-region: ap-south-1 }
       - uses: actions/setup-node@v4
-        if: steps.changed.outputs.ai != '' && env.ANTHROPIC_API_KEY != ''
+        if: steps.changed.outputs.ai != ''
         with: { node-version: 20, cache: npm }
-      - if: steps.changed.outputs.ai != '' && env.ANTHROPIC_API_KEY != ''
-        run: npm ci && npm run eval:ask -w apps/api
+      - if: steps.changed.outputs.ai != ''
+        run: npm ci && npm run eval:ask -w apps/api && npm run eval:triage -w apps/api
 
   images:
     runs-on: ubuntu-latest
@@ -126,9 +132,11 @@ jobs:
           docker build -f apps/api/Dockerfile -t $REG/pulseboard-api:$TAG .
           docker build -f apps/api/Dockerfile --target migrate -t $REG/pulseboard-api:$TAG-migrate .
           docker build -f apps/web/Dockerfile --build-arg NEXT_PUBLIC_API_URL=/api --build-arg NEXT_PUBLIC_SOCKET_URL=/ -t $REG/pulseboard-web:$TAG .
+          docker build ml/eta -t $REG/pulseboard-api:$TAG-eta
           docker push $REG/pulseboard-api:$TAG
           docker push $REG/pulseboard-api:$TAG-migrate
           docker push $REG/pulseboard-web:$TAG
+          docker push $REG/pulseboard-api:$TAG-eta
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
       - run: npm ci

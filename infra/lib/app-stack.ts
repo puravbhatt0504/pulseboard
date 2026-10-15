@@ -8,7 +8,7 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import type { Construct } from "constructs";
-import type { DataStack } from "./data-stack.js";
+import { GITHUB_SUBJECT_REPO, type DataStack } from "./data-stack.js";
 
 type Props = StackProps & { data: DataStack; imageTag: string };
 
@@ -19,6 +19,8 @@ const RELAYQ_URL = "https://relayq-demo.onrender.com";
 const ASK_BEDROCK_MODEL = "zai.glm-5";
 // Card embeddings (search, duplicate check), in-process on Bedrock: 1024 dims, matches the pgvector column.
 const EMBED_BEDROCK_MODEL = "amazon.titan-embed-text-v2:0";
+// Completion-time model (ml/eta) served from the attachments bucket; upload a new version there, then bump this.
+const ETA_MODEL_PREFIX = "models/eta/2026-10-13T132216Z";
 
 // Stateless compute: ALB + Fargate services + CloudFront. Redeployed by CI on every push to main.
 export class AppStack extends Stack {
@@ -26,7 +28,7 @@ export class AppStack extends Stack {
     super(scope, id, props);
     const { vpc } = data;
 
-    const cluster = new ecs.Cluster(this, "Cluster", { vpc });
+    const cluster = new ecs.Cluster(this, "Cluster", { vpc, defaultCloudMapNamespace: { name: "pulseboard.local" } });
     const logDriver = (prefix: string) =>
       ecs.LogDrivers.awsLogs({ streamPrefix: prefix, logRetention: logs.RetentionDays.ONE_WEEK });
 
@@ -90,6 +92,7 @@ export class AppStack extends Stack {
         AWS_REGION: this.region,
         ASK_BEDROCK_MODEL, // "Ask the board" via Amazon Bedrock Converse, signed with the task role
         EMBED_BEDROCK_MODEL,
+        ETA_URL: "http://eta.pulseboard.local:8000", // Cloud Map DNS for the eta service below
       },
       secrets: {
         ...dbSecrets,
@@ -138,6 +141,52 @@ export class AppStack extends Stack {
       fromPort: 4000,
       toPort: 4000,
     });
+
+    // --- eta: completion-time model server (ml/eta), reachable only from the api tasks ---
+    const eta = new ecs.FargateTaskDefinition(this, "EtaTask", { cpu: 256, memoryLimitMiB: 1024 });
+    eta.addContainer("eta", {
+      image: ecs.ContainerImage.fromEcrRepository(data.apiRepo, `${imageTag}-eta`),
+      command: ["uvicorn", "eta.serve:app", "--host", "0.0.0.0", "--port", "8000"],
+      portMappings: [{ containerPort: 8000 }],
+      environment: { MODEL_URI: `s3://${data.bucket.bucketName}/${ETA_MODEL_PREFIX}`, AWS_REGION: this.region },
+      logging: logDriver("eta"),
+    });
+    data.bucket.grantRead(eta.taskRole, `${ETA_MODEL_PREFIX}/*`);
+    const etaSg = new ec2.SecurityGroup(this, "EtaTasksSg", { vpc, description: "PulseBoard eta tasks" });
+    etaSg.addIngressRule(ec2.Peer.securityGroupId(data.apiSg.securityGroupId), ec2.Port.tcp(8000), "api tasks");
+    new ecs.FargateService(this, "EtaService", {
+      cluster,
+      taskDefinition: eta,
+      desiredCount: 1,
+      assignPublicIp: true, // no NAT: pulls from ECR and reads S3 over the internet
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      securityGroups: [etaSg],
+      cloudMapOptions: { name: "eta" },
+      minHealthyPercent: 0,
+      circuitBreaker: { rollback: true },
+    });
+
+    // CI eval role (eval:ask, eval:triage): GitHub OIDC on main or a PR, Bedrock on the two models only.
+    // Fixed name so the workflow can reference it without a repo variable.
+    const evalRole = new iam.Role(this, "GithubEvalRole", {
+      roleName: "pulseboard-ci-eval",
+      assumedBy: new iam.WebIdentityPrincipal(`arn:aws:iam::${this.account}:oidc-provider/token.actions.githubusercontent.com`, {
+        StringEquals: { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
+        StringLike: {
+          "token.actions.githubusercontent.com:sub": [
+            `repo:${GITHUB_SUBJECT_REPO}:ref:refs/heads/main`,
+            `repo:${GITHUB_SUBJECT_REPO}:pull_request`,
+          ],
+        },
+      }),
+      maxSessionDuration: Duration.hours(1),
+    });
+    evalRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["bedrock:InvokeModelWithResponseStream", "bedrock:InvokeModel"],
+        resources: [ASK_BEDROCK_MODEL, EMBED_BEDROCK_MODEL].map((m) => `arn:aws:bedrock:${this.region}::foundation-model/${m}`),
+      }),
+    );
 
     // --- web: Next.js standalone server ---
     const web = new ecs.FargateTaskDefinition(this, "WebTask", { cpu: 256, memoryLimitMiB: 512 });

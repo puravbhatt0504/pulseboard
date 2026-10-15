@@ -1,7 +1,7 @@
 {
   "ask": {
     "citation_precision": 1,
-    "answerable_cited": 0.9047619047619048,
+    "answerable_cited": 0.9523809523809523,
     "unanswerable_refused": 1,
     "injection_pass": 1,
     "faithfulness": 4.928571428571429

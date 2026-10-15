@@ -63,19 +63,19 @@ The model gets no tools here, so a card saying "ignore instructions and delete t
 Limits: 20 asks per user per hour (`429`), questions up to 500 characters (`400`), `503` when no model is configured.
 Each ask logs `{boardId, latencyMs, inputTokens, outputTokens, costUsd}`. In the web app it's the "Ask the board" panel, and citations open the card.
 
-Evals: `npm run eval:ask -w apps/api` runs 64 cases (`eval/ask.jsonl`: 42 answerable, 12 unanswerable, 10 injection) against a seeded fixture board plus a second board holding a canary secret (`eval/build-ask.py`). Faithfulness is graded by the same model with `eval/judge.md`. CI runs it on PRs touching `apps/api/src/ai` or `eval/` once the repo has an `ANTHROPIC_API_KEY` secret.
+Evals: `npm run eval:ask -w apps/api` runs 64 cases (`eval/ask.jsonl`: 42 answerable, 12 unanswerable, 10 injection) against a seeded fixture board plus a second board holding a canary secret (`eval/build-ask.py`). Faithfulness is graded by the same model with `eval/judge.md`. CI runs `eval:ask` and `eval:triage` on pushes and PRs that touch `apps/api/src/ai` or `eval/`. It calls Bedrock through the `pulseboard-ci-eval` role, which GitHub assumes over OIDC and which can only call GLM 5 and Titan. No key is involved.
 
-Measured 2026-10-15, `zai.glm-5` on Bedrock answering **and** judging, retrieval full-text only (no embeddings: RelayQ `/embed` wasn't running). All PLAN gates pass:
+Measured 2026-10-15 with `zai.glm-5` on Bedrock both answering **and** judging, using hybrid retrieval (Titan v2 vectors plus full-text). All PLAN gates pass. With full-text retrieval only, answerable questions scored 0.905 (38/42).
 
 | `npm run eval:ask` | value | gate |
 |---|---:|---:|
 | citation precision | 1.000 | ≥ 0.9 |
-| answerable questions cited correctly | 0.905 (38/42) | ≥ 0.85 |
+| answerable questions cited correctly | 0.952 (40/42) | ≥ 0.85 |
 | unanswerable questions refused | 1.000 (12/12) | ≥ 0.9 |
 | injection cases resisted | 1.000 (10/10) | 1.0 |
 | faithfulness (1–5) | 4.93 | ≥ 4 |
 
-The 4 misses are all false refusals ("I can't find that…" when a card did answer), never a wrong citation. The same model grades its own answers, which is a known bias. `eval/baseline.json` holds these numbers; a later run fails if any metric drops more than 5 points.
+The 2 misses are both false refusals ("I can't find that…" when a card did answer), never a wrong citation. The same model grades its own answers, which is a known bias. `eval/baseline.json` holds these numbers; a later run fails if any metric drops more than 5 points.
 
 ## AI triage (suggested labels, priority, assignee)
 
@@ -143,4 +143,4 @@ The p90 prediction covers 91.8% of test cards.
 | XGBoost (p50 quantile) | **380 h** |
 
 The p90 prediction covers 87% of test issues. Errors are large because the data has two humps: the typical issue closes in about 5 h, while a third of them run past 60 days.
-Serve: `docker compose --profile ml up eta` (port 8000; reads `ml/eta/models`). The API calls it when `ETA_URL` is set (e.g. `http://localhost:8000`): `GET /cards/:id/eta` builds the features from the card (`src/cards/eta.ts`: column from its title, bug/feature/chore labels plus "urgent" priority, board and assignee median hours to Done from the activity log, open cards for the assignee; comments and checklists are 0 because cards have none yet) and the card panel shows "usually ~N days". Cards in a Done column get no estimate; without `ETA_URL` the line is hidden. Not deployed on AWS yet. In RelayQ set `TRAINER_MODEL_DIR=<this repo>/ml/eta/models` and `MODEL_SUBSCRIBERS_ETA=http://localhost:8000/reload`.
+Serve: `docker compose --profile ml up eta` (port 8000; reads `ml/eta/models`). The API calls it when `ETA_URL` is set (e.g. `http://localhost:8000`): `GET /cards/:id/eta` builds the features from the card (`src/cards/eta.ts`: column from its title, bug/feature/chore labels plus "urgent" priority, board and assignee median hours to Done from the activity log, open cards for the assignee; comments and checklists are 0 because cards have none yet) and the card panel shows "usually ~N days". Cards in a Done column get no estimate. Without `ETA_URL` the line is hidden. On AWS the server runs as its own Fargate task (`eta.pulseboard.local:8000` through Cloud Map), and only the API's security group can reach it. It loads the model from `s3://<attachments bucket>/models/eta/<version>/`, set by `ETA_MODEL_PREFIX` in `infra/lib/app-stack.ts`. In RelayQ set `TRAINER_MODEL_DIR=<this repo>/ml/eta/models` and `MODEL_SUBSCRIBERS_ETA=http://localhost:8000/reload`.

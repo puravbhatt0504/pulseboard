@@ -51,6 +51,21 @@ export async function embedIfChanged({ prisma }: Pick<Deps, "prisma">, cardId: s
   return true;
 }
 
+/**
+ * Embeds every card with no vector from the current Bedrock model (cards from before a model switch), one at a time.
+ * Runs on API boot; with everything embedded it's one query. Returns how many it embedded.
+ * ponytail: both api tasks run it at once and may embed the same card twice (harmless upsert); add a Redis lock if that costs.
+ */
+export async function backfillEmbeddings({ prisma }: Pick<Deps, "prisma">): Promise<number> {
+  if (!bedrockEmbedModel()) return 0;
+  const missing = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT c."id" FROM "Card" c LEFT JOIN "CardEmbedding" e ON e."cardId" = c."id" AND e."model" = ${embedModel()}
+    WHERE e."cardId" IS NULL`;
+  let done = 0;
+  for (const { id } of missing) if (await embedIfChanged({ prisma }, id).catch((e) => (console.error("backfill:", e.message), false))) done++;
+  return done;
+}
+
 const isVector = (v: unknown): v is number[] => Array.isArray(v) && v.length === EMBED_DIMS && v.every(Number.isFinite);
 export const vectorLiteral = (v: number[]) => `[${v.join(",")}]`;
 

@@ -9,7 +9,7 @@ import type { Construct } from "constructs";
 
 // GitHub's immutable OIDC subject (owner@id/repo@id), as configured on this repo: survives renames, so a
 // recreated repo with the same name can't inherit the deploy role.
-const GITHUB_SUBJECT_REPO = "puravbhatt0504@134580434/pulseboard@1411988220";
+export const GITHUB_SUBJECT_REPO = "puravbhatt0504@134580434/pulseboard@1411988220";
 
 // Long-lived resources: network, data stores, image repos, CI role. Deployable without Docker.
 export class DataStack extends Stack {

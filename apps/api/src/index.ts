@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { Redis } from "ioredis";
 import { createServer } from "./app.js";
+import { backfillEmbeddings } from "./ai/embed.js";
 
 // ECS injects the RDS credentials separately (password from Secrets Manager); the generated password
 // excludes URL-reserved characters, so no encoding is needed.
@@ -16,5 +17,6 @@ const port = Number(process.env.PORT ?? 4000);
 
 const { server, collab } = createServer({ prisma, redis });
 server.listen(port, () => console.log(`api on :${port}`));
+void backfillEmbeddings({ prisma }).then((n) => n && console.log(`backfill: embedded ${n} cards`), (e) => console.error("backfill:", e));
 // Deploys send SIGTERM: write open card docs before exiting (clients would resync them anyway on reconnect).
 process.once("SIGTERM", () => void collab.flush().finally(() => process.exit(0)));

@@ -6,7 +6,7 @@ import type { AddressInfo } from "node:net";
 import request from "supertest";
 import { makeTestApp, uniqueEmail } from "../test/harness.js";
 import { signAccess } from "../auth/jwt.js";
-import { cardText, EMBED_DIMS, embedIfChanged, textHash, vectorLiteral } from "./embed.js";
+import { backfillEmbeddings, cardText, EMBED_DIMS, embedIfChanged, textHash, vectorLiteral } from "./embed.js";
 import { rrf } from "./search.js";
 
 const { app, prisma } = makeTestApp();
@@ -196,6 +196,11 @@ describe("EMBED_BEDROCK_MODEL (Titan on Bedrock, no RelayQ)", () => {
       const hits = (await search(ids.boardA, "zzqx-no-text-match")).body.map((h: { cardId: string }) => h.cardId);
       expect(hits).toContain(titan);
       expect(hits).not.toContain(voyage);
+
+      // Backfill: every card without a Titan vector gets one (the voyage twin included); a second run has nothing to do.
+      expect(await backfillEmbeddings({ prisma })).toBeGreaterThan(0);
+      expect((await prisma.cardEmbedding.findUnique({ where: { cardId: voyage } }))?.model).toBe("amazon.titan-embed-text-v2:0");
+      expect(await backfillEmbeddings({ prisma })).toBe(0);
     } finally {
       fake.close();
       for (const k of Object.keys(env)) delete process.env[k];
