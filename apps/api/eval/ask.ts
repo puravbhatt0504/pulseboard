@@ -8,7 +8,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import { ask } from "../src/ai/ask.js";
 import { generate, llmConfigured, llmName } from "../src/ai/llm.js";
-import { cardText, textHash, vectorLiteral } from "../src/ai/embed.js";
+import { cardText, embedModel, textHash, vectorLiteral } from "../src/ai/embed.js";
 import { startPostgres } from "../src/test/pg.js";
 import { embedAll, readJsonl } from "./lib.js";
 
@@ -70,7 +70,7 @@ try {
     const vectors = await embedAll(fixture.map((c) => cardText(c)));
     for (const [i, c] of fixture.entries()) {
       await prisma.$executeRaw`INSERT INTO "CardEmbedding" ("cardId", "embedding", "contentHash", "model", "updatedAt")
-        VALUES (${keyToId.get(c.key)}, ${vectorLiteral(vectors[i])}::vector, ${textHash(cardText(c))}, 'eval', now())`;
+        VALUES (${keyToId.get(c.key)}, ${vectorLiteral(vectors[i])}::vector, ${textHash(cardText(c))}, ${embedModel()}, now())`;
     }
   } catch {
     retrieval = "full-text only (RelayQ /embed unavailable)";

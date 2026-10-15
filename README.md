@@ -20,29 +20,28 @@ node deploy/trace-check.mjs
 
 ## Semantic search + duplicate detection
 
-Cards are embedded (Voyage `voyage-3.5`, 1024 dims) through RelayQ: `embed.batch` when a card's text changes (skipped when the text hash is unchanged), and RelayQ's synchronous `POST /embed` for a search query or the "Looks like…" check while typing a new card. Vectors live in Postgres (pgvector, HNSW). Search fuses vector top 10 and full-text top 10 with Reciprocal Rank Fusion (k = 60), scoped to one board. If embeddings are unavailable, search falls back to full-text only.
+Cards are embedded with Amazon Titan Text Embeddings v2 on Bedrock (1024 dims, normalized), in-process through the API's task role: no key, no queue. Set `EMBED_BEDROCK_MODEL=amazon.titan-embed-text-v2:0`; without it, embedding goes through RelayQ and Voyage `voyage-3.5` as before (`embed.batch` plus a synchronous `POST /embed`). An embed is skipped when the card's text hash and the model are both unchanged. Each vector is tagged with its model, and search only compares vectors from the current model, so switching models never mixes vector spaces. Vectors live in Postgres (pgvector, HNSW). Search fuses vector top 10 and full-text top 10 with Reciprocal Rank Fusion (k = 60), scoped to one board. If embeddings are unavailable or throttled, search falls back to full-text only.
 
-Eval data is real: GitHub issues that maintainers closed as "Duplicate of #N" in facebook/react and microsoft/vscode (`node eval/build-datasets.mjs`). That gives 368 labelled pairs (half true duplicates) and 184 search queries (a duplicate's title, expecting its original) over 85 cards.
+The eval data is real. It comes from GitHub issues that maintainers closed as "Duplicate of #N" in facebook/react and microsoft/vscode (`node eval/build-datasets.mjs`). That gives 368 labelled pairs (half of them true duplicates) and 184 search queries over 85 cards. Each query is a duplicate's title, and the expected result is its original.
 
-**These numbers are from the local stand-in embedder (`deploy/voyage-stub.mjs`: hashed words and trigrams), not Voyage.** It sees wording, not meaning, so it favours full-text. Re-run both evals with a real `VOYAGE_API_KEY` and update this table and `DUP_THRESHOLD`.
+Measured with Titan v2 (2026-10-15):
 
-| `npm run eval:dup` (stand-in) | precision | recall |
+| `npm run eval:dup` | precision | recall |
 |---|---|---|
-| threshold 0.85 | 0.892 | 0.315 |
-| **threshold 0.90 (chosen: lowest with precision ≥ 0.90)** | **0.963** | **0.141** |
-| threshold 0.95 | 1.000 | 0.092 |
+| threshold 0.55 | 0.876 | 0.842 |
+| **threshold 0.60 (chosen: lowest with precision ≥ 0.90)** | **0.908** | **0.755** |
+| threshold 0.70 | 0.957 | 0.598 |
+| threshold 0.90 | 1.000 | 0.082 |
 
-| `npm run eval:search` (stand-in) | Recall@5 |
+| `npm run eval:search` | Recall@5 |
 |---|---|
-| hybrid (RRF) | 0.853 |
-| vector only | 0.793 |
+| hybrid (RRF) | 0.957 |
+| vector only | 0.957 |
 | full-text only | 0.880 |
 
-To run the evals locally, start the stand-in, then RelayQ's API with `VOYAGE_BASE_URL=http://localhost:8099 VOYAGE_API_KEY=stub` (or with a real key and no `VOYAGE_BASE_URL`):
+With real embeddings, hybrid ties vector-only, and both beat full-text by 7.7 points. The gate is hybrid ≥ vector-only and hybrid > full-text. Hybrid stays because it finds exact identifiers (error codes, ticket numbers) that embeddings blur. These search queries are paraphrased titles, so the eval doesn't measure that case. `DUP_THRESHOLD` is tuned for Titan. Re-run `eval:dup` if you switch models.
 
-```bash
-node deploy/voyage-stub.mjs
-```
+The evals need AWS credentials that can call Bedrock (locally: `AWS_PROFILE`). New accounts have a low Titan quota, so the eval waits out throttling between batches.
 
 ```bash
 npm run eval:dup -w apps/api

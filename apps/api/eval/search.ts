@@ -1,9 +1,9 @@
 // npm run eval:search → Recall@5 on eval/search.jsonl for hybrid vs vector-only vs text-only, using the real
 // searchBoard() against a throwaway Postgres + pgvector holding eval/corpus.jsonl as one board's cards.
-// Exit 1 unless hybrid beats vector-only.
+// Exit 1 unless hybrid ≥ vector-only and hybrid > text-only (real embeddings tie hybrid and vector).
 import { execSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
-import { textHash, cardText, vectorLiteral } from "../src/ai/embed.js";
+import { textHash, cardText, embedModel, vectorLiteral } from "../src/ai/embed.js";
 import { searchBoard } from "../src/ai/search.js";
 import { startPostgres } from "../src/test/pg.js";
 import { embedAll, readJsonl } from "./lib.js";
@@ -23,14 +23,15 @@ try {
     const card = await prisma.card.create({ data: { columnId: column.id, title: c.title, description: c.description, position: `p${String(i).padStart(5, "0")}` } });
     idToKey.set(card.id, c.key);
     await prisma.$executeRaw`INSERT INTO "CardEmbedding" ("cardId", "embedding", "contentHash", "model", "updatedAt")
-      VALUES (${card.id}, ${vectorLiteral(vectors[i])}::vector, ${textHash(cardText(c))}, 'eval', now())`;
+      VALUES (${card.id}, ${vectorLiteral(vectors[i])}::vector, ${textHash(cardText(c))}, ${embedModel()}, now())`;
   }
 
+  const queryVectors = await embedAll(queries.map((q) => q.query));
   const recall: Record<string, number> = {};
   for (const mode of ["hybrid", "vector", "text"] as const) {
     let hits = 0;
-    for (const q of queries) {
-      const top5 = (await searchBoard({ prisma }, board.id, q.query, mode)).slice(0, 5).map((r) => idToKey.get(r.cardId));
+    for (const [i, q] of queries.entries()) {
+      const top5 = (await searchBoard({ prisma }, board.id, q.query, mode, undefined, queryVectors[i])).slice(0, 5).map((r) => idToKey.get(r.cardId));
       if (top5.includes(q.expected)) hits++;
     }
     recall[mode] = hits / queries.length;
@@ -38,8 +39,8 @@ try {
   await prisma.$disconnect();
   console.log(`${corpus.length} cards, ${queries.length} queries\n\nmode     Recall@5`);
   for (const [mode, r] of Object.entries(recall)) console.log(`${mode.padEnd(8)} ${r.toFixed(3)}`);
-  const ok = recall.hybrid > recall.vector;
-  console.log(`\nhybrid ${ok ? "beats" : "does NOT beat"} vector-only`);
+  const ok = recall.hybrid >= recall.vector && recall.hybrid > recall.text;
+  console.log(`\nhybrid ${ok ? "≥ vector-only and > text-only" : "FAILS: below vector-only or not above text-only"}`);
   process.exitCode = ok ? 0 : 1;
 } finally {
   pg.stop();

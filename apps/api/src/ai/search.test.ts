@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createHmac } from "node:crypto";
 import { createServer, type IncomingMessage, type Server } from "node:http";
+import { createServer as createHttp2Server } from "node:http2";
 import type { AddressInfo } from "node:net";
 import request from "supertest";
 import { makeTestApp, uniqueEmail } from "../test/harness.js";
@@ -160,3 +161,45 @@ describe("indexing", () => {
     expect((await post(signed({ items: [{ id: `${id}:x`, embedding: [1, 2, 3] }] }))).status).toBe(400);
   });
 });
+
+describe("EMBED_BEDROCK_MODEL (Titan on Bedrock, no RelayQ)", () => {
+  it("embeds in-process, tags the model, skips unchanged text, and never compares vectors across models", async () => {
+    // Fake Bedrock runtime (HTTP/2, like the real client): /model/<id>/invoke → {embedding}.
+    const calls: { url?: string; inputText: string; dimensions: number }[] = [];
+    const fake = createHttp2Server((req, res) => {
+      let raw = "";
+      req.on("data", (c) => (raw += c)).on("end", () => {
+        calls.push({ url: req.url, ...JSON.parse(raw) });
+        res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ embedding: axis(7), inputTextTokenCount: 3 }));
+      });
+    });
+    await new Promise<void>((r) => fake.listen(0, r));
+    const env = {
+      EMBED_BEDROCK_MODEL: "amazon.titan-embed-text-v2:0",
+      AWS_ENDPOINT_URL_BEDROCK_RUNTIME: `http://localhost:${(fake.address() as AddressInfo).port}`,
+      AWS_REGION: "ap-south-1",
+      AWS_ACCESS_KEY_ID: "AKIATESTONLY", // test-only fake keys: requests go to the local fake server
+      AWS_SECRET_ACCESS_KEY: "test-only",
+    };
+    Object.assign(process.env, env);
+    try {
+      const enqueuedBefore = jobs.length;
+      const titan = await card(ids.colA, "Titan card", "embedded on bedrock");
+      const voyage = await card(ids.colA, "Voyage twin", "", axis(7)); // same vector, other model
+
+      expect(await embedIfChanged({ prisma }, titan)).toBe(true);
+      expect(calls[0]).toMatchObject({ url: "/model/amazon.titan-embed-text-v2%3A0/invoke", inputText: cardText({ title: "Titan card", description: "embedded on bedrock" }), dimensions: 1024 });
+      expect((await prisma.cardEmbedding.findUnique({ where: { cardId: titan } }))?.model).toBe("amazon.titan-embed-text-v2:0");
+      expect(await embedIfChanged({ prisma }, titan)).toBe(false); // unchanged text, same model
+      expect(jobs.length).toBe(enqueuedBefore); // nothing went to RelayQ
+
+      const hits = (await search(ids.boardA, "zzqx-no-text-match")).body.map((h: { cardId: string }) => h.cardId);
+      expect(hits).toContain(titan);
+      expect(hits).not.toContain(voyage);
+    } finally {
+      fake.close();
+      for (const k of Object.keys(env)) delete process.env[k];
+    }
+  });
+});
+

@@ -17,6 +17,8 @@ const RELAYQ_URL = "https://relayq-demo.onrender.com";
 // "Ask the board" model on Amazon Bedrock. Claude (any version), GLM 5.3 and Nemotron Super were refused or hung
 // for this account on 2026-10-15; GLM 5 answers.
 const ASK_BEDROCK_MODEL = "zai.glm-5";
+// Card embeddings (search, duplicate check), in-process on Bedrock: 1024 dims, matches the pgvector column.
+const EMBED_BEDROCK_MODEL = "amazon.titan-embed-text-v2:0";
 
 // Stateless compute: ALB + Fargate services + CloudFront. Redeployed by CI on every push to main.
 export class AppStack extends Stack {
@@ -87,6 +89,7 @@ export class AppStack extends Stack {
         RELAYQ_URL,
         AWS_REGION: this.region,
         ASK_BEDROCK_MODEL, // "Ask the board" via Amazon Bedrock Converse, signed with the task role
+        EMBED_BEDROCK_MODEL,
       },
       secrets: {
         ...dbSecrets,
@@ -106,6 +109,12 @@ export class AppStack extends Stack {
       new iam.PolicyStatement({
         actions: ["bedrock:InvokeModelWithResponseStream"],
         resources: [`arn:aws:bedrock:${this.region}::foundation-model/${ASK_BEDROCK_MODEL}`],
+      }),
+    );
+    api.taskRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ["bedrock:InvokeModel"],
+        resources: [`arn:aws:bedrock:${this.region}::foundation-model/${EMBED_BEDROCK_MODEL}`],
       }),
     );
 

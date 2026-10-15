@@ -1,10 +1,10 @@
 import type { Deps } from "../app.js";
-import { embedNow, vectorLiteral } from "./embed.js";
+import { embedModel, embedNow, vectorLiteral } from "./embed.js";
 
 export const RRF_K = 60;
 export const TOP_K = 10;
 /** Cosine similarity at or above which a new card "looks like" an existing one. Tuned by `npm run eval:dup`. */
-export const DUP_THRESHOLD = Number(process.env.DUP_THRESHOLD ?? 0.9); // eval:dup on the stand-in; re-run with Voyage
+export const DUP_THRESHOLD = Number(process.env.DUP_THRESHOLD ?? 0.6); // eval:dup on Titan v2: precision 0.908, recall 0.755; re-run if the model changes
 
 type Hit = { cardId: string; title: string };
 export type Result = Hit & { score: number };
@@ -34,7 +34,7 @@ async function vectorHits({ prisma }: Pick<Deps, "prisma">, boardId: string, vec
     prisma.$queryRaw<(Hit & { similarity: number })[]>`
       SELECT c."id" AS "cardId", c."title", 1 - (e."embedding" <=> ${vectorLiteral(vector)}::vector) AS "similarity"
       FROM "CardEmbedding" e JOIN "Card" c ON c."id" = e."cardId" JOIN "Column" col ON col."id" = c."columnId"
-      WHERE col."boardId" = ${boardId}
+      WHERE col."boardId" = ${boardId} AND e."model" = ${embedModel()}
       ORDER BY e."embedding" <=> ${vectorLiteral(vector)}::vector
       LIMIT ${limit}`,
   ]);
@@ -60,8 +60,9 @@ function textHits({ prisma }: Pick<Deps, "prisma">, boardId: string, q: string, 
  */
 export async function searchBoard(
   deps: Pick<Deps, "prisma">, boardId: string, q: string, mode: "hybrid" | "vector" | "text" = "hybrid", limit = TOP_K,
+  queryVector?: number[], // the eval passes a pre-embedded query so a throttled embed can't silently degrade to text-only
 ) {
-  const vector = mode === "text" ? null : (await embedNow([q]))?.[0];
+  const vector = mode === "text" ? null : (queryVector ?? (await embedNow([q]))?.[0]);
   const [vec, text] = await Promise.all([
     vector ? vectorHits(deps, boardId, vector, limit) : [],
     mode === "vector" ? [] : textHits(deps, boardId, q, limit),
