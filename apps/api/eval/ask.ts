@@ -1,7 +1,8 @@
 // npm run eval:ask → runs the real ask() pipeline over eval/ask.jsonl against eval/ask-board.jsonl (seeded into a
 // throwaway Postgres) and grades it. Needs ASK_BEDROCK_MODEL + AWS credentials (Bedrock), or ANTHROPIC_API_KEY. Embeddings are used if RelayQ answers POST /embed,
 // otherwise retrieval is full-text only (said in the output). Judge: the same model as ask(), with eval/judge.md.
-// Exit 1 if a PLAN Phase 11 gate fails or any metric drops > 5 points below eval/baseline.json.
+// Exit 1 if a PLAN Phase 11 gate fails or any metric drops > 10 points below eval/baseline.json.
+// 10, not 5: GLM 5 on Bedrock isn't deterministic even at temperature 0; answerable_cited spread 0.857-0.952 over 4 identical runs (1 case = 2.4 points).
 //   npm run eval:ask -- --update-baseline   → write the measured metrics as the new baseline
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -128,9 +129,9 @@ try {
   let ok = true;
   for (const [k, v] of Object.entries(metrics) as [keyof typeof metrics, number][]) {
     const base = baseline[k];
-    // Faithfulness is on a 1-5 scale: 5 points of a percentage = 0.2 of a score point.
+    // Faithfulness is on a 1-5 scale: 10 points of a percentage = 0.4 of a score point.
     const drop = base === undefined ? 0 : (base - v) / (k === "faithfulness" ? 4 : 1);
-    const pass = v >= gates[k] && drop <= 0.05;
+    const pass = v >= gates[k] && drop <= 0.1;
     ok &&= pass;
     console.log(`${k.padEnd(22)} ${v.toFixed(3).padStart(5)}   ≥${String(gates[k]).padEnd(5)} ${base?.toFixed(3) ?? "-"}  ${pass ? "" : "FAIL"}`);
   }

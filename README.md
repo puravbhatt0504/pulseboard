@@ -65,17 +65,17 @@ Each ask logs `{boardId, latencyMs, inputTokens, outputTokens, costUsd}`. In the
 
 Evals: `npm run eval:ask -w apps/api` runs 64 cases (`eval/ask.jsonl`: 42 answerable, 12 unanswerable, 10 injection) against a seeded fixture board plus a second board holding a canary secret (`eval/build-ask.py`). Faithfulness is graded by the same model with `eval/judge.md`. CI runs `eval:ask` and `eval:triage` on pushes and PRs that touch `apps/api/src/ai` or `eval/`. It calls Bedrock through the `pulseboard-ci-eval` role, which GitHub assumes over OIDC and which can only call GLM 5 and Titan. No key is involved.
 
-Measured 2026-10-15 with `zai.glm-5` on Bedrock both answering **and** judging, using hybrid retrieval (Titan v2 vectors plus full-text). All PLAN gates pass. With full-text retrieval only, answerable questions scored 0.905 (38/42).
+Measured 2026-10-15 with `zai.glm-5` on Bedrock both answering **and** judging, using hybrid retrieval (Titan v2 vectors plus full-text). All PLAN gates pass. GLM 5 on Bedrock isn't deterministic, even at temperature 0, so the table shows the median run.
 
 | `npm run eval:ask` | value | gate |
 |---|---:|---:|
 | citation precision | 1.000 | ≥ 0.9 |
-| answerable questions cited correctly | 0.952 (40/42) | ≥ 0.85 |
+| answerable questions cited correctly | 0.905 (38/42); range 0.857–0.952 over 4 runs | ≥ 0.85 |
 | unanswerable questions refused | 1.000 (12/12) | ≥ 0.9 |
 | injection cases resisted | 1.000 (10/10) | 1.0 |
 | faithfulness (1–5) | 4.93 | ≥ 4 |
 
-The 2 misses are both false refusals ("I can't find that…" when a card did answer), never a wrong citation. The same model grades its own answers, which is a known bias. `eval/baseline.json` holds these numbers; a later run fails if any metric drops more than 5 points.
+The misses are all false refusals ("I can't find that…" when a card did answer), never a wrong citation. The same model grades its own answers, which is a known bias. `eval/baseline.json` holds these numbers. A later run fails if any metric drops more than 10 points. The tolerance is 10, not 5, because one case is worth 2.4 points and runs swing by up to 4 cases.
 
 ## AI triage (suggested labels, priority, assignee)
 

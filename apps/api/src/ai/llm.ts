@@ -26,7 +26,7 @@ export async function generate({ system, prompt, maxTokens, onText = () => {}, s
         modelId,
         system: [{ text: system }],
         messages: [{ role: "user", content: [{ text: prompt }] }],
-        inferenceConfig: { maxTokens },
+        inferenceConfig: { maxTokens, temperature: 0 }, // grounded answers + evals: no sampling noise
       }),
       { abortSignal: signal },
     );
