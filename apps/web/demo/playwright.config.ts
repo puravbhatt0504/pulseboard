@@ -1,4 +1,4 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, type PlaywrightTestConfig } from "@playwright/test";
 import base from "../playwright.config";
 
 // Records the realtime demo video (not a test): npx playwright test -c demo/playwright.config.ts
@@ -6,7 +6,7 @@ import base from "../playwright.config";
 export default defineConfig({
   ...base,
   // cwd resolves from this file's folder, one level deeper than the base config.
-  webServer: (base.webServer as { cwd?: string }[]).map((s) => ({ ...s, cwd: s.cwd ? `../${s.cwd}` : ".." })),
+  webServer: (base.webServer as Extract<PlaywrightTestConfig["webServer"], unknown[]>).map((s) => ({ ...s, cwd: s.cwd ? `../${s.cwd}` : ".." })),
   testDir: ".",
   testMatch: "realtime.demo.ts",
   timeout: 180_000,
