@@ -6,6 +6,10 @@ $ErrorActionPreference = 'Stop'
 $svc = 'srv-db6rnuon74is738p9dfg'
 $user = 'pulseboard-render-bedrock'
 if (-not $env:RENDER_API_KEY) { throw 'Set $env:RENDER_API_KEY first (Dashboard > Account Settings > API Keys).' }
+$h = @{ Authorization = "Bearer $env:RENDER_API_KEY"; Accept = 'application/json' }
+# Check the Render key before creating an AWS key, so a bad Render key can't leave an orphaned AWS key behind.
+try { Invoke-RestMethod -Uri "https://api.render.com/v1/services/$svc" -Headers $h | Out-Null }
+catch { throw "Render rejected RENDER_API_KEY for service $svc ($($_.Exception.Message)). Check the key; nothing was created." }
 
 # One key at a time: an older key for this user means it was already set up (rotate by deleting it in IAM first).
 $existing = aws iam list-access-keys --user-name $user --profile pulseboard --query 'AccessKeyMetadata[].AccessKeyId' --output text
@@ -16,7 +20,6 @@ if ($existing -and $existing -ne 'None') { throw "$user already has an access ke
 $key = aws iam create-access-key --user-name $user --profile pulseboard --output json | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0) { throw 'aws iam create-access-key failed' }
 
-$h = @{ Authorization = "Bearer $env:RENDER_API_KEY"; Accept = 'application/json' }
 $vars = [ordered]@{
   AWS_REGION            = 'ap-south-1'
   ASK_BEDROCK_MODEL     = 'zai.glm-5'
