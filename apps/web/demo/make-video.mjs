@@ -13,3 +13,10 @@ execFileSync("ffmpeg", [
   "-map", "[v]", "-c:v", "libx264", "-crf", "20", "-preset", "slow", "-movflags", "+faststart", out,
 ], { stdio: "inherit" });
 console.log(`wrote ${out}`);
+// GIF for the README: GitHub plays it inline (a committed mp4 only opens as a download).
+execFileSync("ffmpeg", [
+  "-y", "-i", out,
+  "-vf", "fps=12,scale=1200:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle",
+  "../../docs/realtime-demo.gif",
+], { stdio: "inherit" });
+console.log("wrote ../../docs/realtime-demo.gif");
