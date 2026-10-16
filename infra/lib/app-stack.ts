@@ -16,9 +16,9 @@ type Props = StackProps & { data: DataStack; imageTag: string };
 const RELAYQ_URL = "https://relayq-demo.onrender.com";
 // "Ask the board" model on Amazon Bedrock. Claude (any version), GLM 5.3 and Nemotron Super were refused or hung
 // for this account on 2026-10-15; GLM 5 answers.
-const ASK_BEDROCK_MODEL = "zai.glm-5";
+export const ASK_BEDROCK_MODEL = "zai.glm-5";
 // Card embeddings (search, duplicate check), in-process on Bedrock: 1024 dims, matches the pgvector column.
-const EMBED_BEDROCK_MODEL = "amazon.titan-embed-text-v2:0";
+export const EMBED_BEDROCK_MODEL = "amazon.titan-embed-text-v2:0";
 // Completion-time model (ml/eta) served from the attachments bucket; upload a new version there, then bump this.
 const ETA_MODEL_PREFIX = "models/eta/2026-10-13T132216Z";
 

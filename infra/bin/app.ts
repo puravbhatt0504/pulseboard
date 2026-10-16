@@ -1,5 +1,6 @@
 import { App, Tags } from "aws-cdk-lib";
-import { AppStack } from "../lib/app-stack.js";
+import { AppStack, ASK_BEDROCK_MODEL, EMBED_BEDROCK_MODEL } from "../lib/app-stack.js";
+import { BedrockUserStack } from "../lib/bedrock-user-stack.js";
 import { DataStack } from "../lib/data-stack.js";
 import { LoadStack } from "../lib/load-stack.js";
 
@@ -18,3 +19,6 @@ new AppStack(app, "PulseboardApp", { env, data, imageTag });
 
 // Phase 7 load generator, deployed by hand only: npx cdk deploy PulseboardLoad --exclusively
 new LoadStack(app, "PulseboardLoad", { env, data });
+
+// Bedrock credentials for the Render deploy; kept when App/Data are destroyed: npx cdk deploy PulseboardBedrock --exclusively
+new BedrockUserStack(app, "PulseboardBedrock", { env, models: [ASK_BEDROCK_MODEL, EMBED_BEDROCK_MODEL] });

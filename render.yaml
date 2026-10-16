@@ -32,6 +32,18 @@ services:
         value: /
       # RelayQ board exports. RELAYQ_SERVICE_TOKEN must also be set as relayq-demo's PULSEBOARD_TOKEN;
       # RELAYQ_WEBHOOK_SECRET must equal relayq-demo's WEBHOOK_SECRET; RELAYQ_API_KEY is a tenant key from RelayQ.
+      # AI on Amazon Bedrock (ask, triage, embeddings) with the pulseboard-render-bedrock IAM user
+      # (infra PulseboardBedrock stack: those two models only). Paste its access key pair.
+      - key: AWS_REGION
+        value: ap-south-1
+      - key: ASK_BEDROCK_MODEL
+        value: zai.glm-5
+      - key: EMBED_BEDROCK_MODEL
+        value: amazon.titan-embed-text-v2:0
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
       - key: RELAYQ_URL
         value: https://relayq-demo.onrender.com
       - key: RELAYQ_SERVICE_TOKEN
