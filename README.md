@@ -4,6 +4,21 @@ Real-time collaborative Kanban: Express + Prisma + Postgres + Redis + Socket.io 
 
 Live demo (Render free tier, sleeps when idle): https://pulseboard-fmbj.onrender.com
 
+## Ran on AWS (2026-10-14 → 2026-10-16)
+
+The full stack ran in production on AWS (ap-south-1), deployed by CI on every push to main, and was then torn down to save cost. The Render demo above runs the same code.
+
+- **Infra as code (CDK, `infra/`):** CloudFront → ALB → ECS Fargate (2 API tasks, a Next.js web task, and the ETA model server reachable only from the API through Cloud Map), RDS Postgres 16 with pgvector, ElastiCache Redis, S3 attachments and model artifacts, and ECR. No NAT: the tasks run in public subnets and security groups lock them down.
+- **CI/CD (GitHub Actions):** test, e2e and image jobs, then `cdk deploy` over GitHub OIDC with no static AWS keys ([last green deploy](https://github.com/puravbhatt0504/pulseboard/actions/runs/38766520933)). The eval job runs the RAG and triage evals on Bedrock through a separate OIDC role that can only call two models.
+- **AI on Amazon Bedrock with no API key:** "Ask the board" and triage use GLM 5 through the Converse API, and embeddings use Titan v2, all signed with the ECS task role.
+- **Load test (Phase 7):** 100 concurrent websocket users at a broadcast p95 of 78.5 ms with 0% errors on two 0.25-vCPU API tasks. Past that point the API was CPU-bound (see "Load test" below).
+
+| Board (realtime, CloudFront URL) | AI triage + completion-time estimate |
+|---|---|
+| ![Board](docs/aws/01-board.jpg) | ![Triage suggestions and ETA](docs/aws/02-triage-eta.jpg) |
+| **Semantic search** ("purchase broken for big orders" finds the checkout card, with no shared words) | **Ask the board** (answer cites the cards it used) |
+| ![Semantic search](docs/aws/04-semantic-search.jpg) | ![Ask the board](docs/aws/05-ask-the-board.jpg) |
+
 ## Tracing
 
 OpenTelemetry in the API (`apps/api/src/otel.ts`, loaded with `node --import`; off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set). A board export is one trace: `pulseboard-api` → `relayq-api` → `relayq-worker` → the signed callback back into `pulseboard-api` (W3C `traceparent` on every hop).

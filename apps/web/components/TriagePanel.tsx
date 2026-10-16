@@ -14,8 +14,9 @@ type Triage = {
 
 const name = (m: Member) => m.email.split("@")[0];
 type Eta = { p50Hours: number; p90Hours: number } | { done: true };
-/** 5 → "~5 hours", 50 → "~2 days". */
-export const humanHours = (h: number) => (h < 24 ? `~${Math.max(1, Math.round(h))} hours` : `~${Math.round(h / 24)} days`);
+/** 0.4 → "~1 hour", 5 → "~5 hours", 30 → "~1 day", 50 → "~2 days". */
+const plural = (n: number, unit: string) => `~${n} ${unit}${n === 1 ? "" : "s"}`;
+export const humanHours = (h: number) => (h < 24 ? plural(Math.max(1, Math.round(h)), "hour") : plural(Math.round(h / 24), "day"));
 
 /** Card labels / priority / assignee, plus AI triage suggestions as one-click chips. Nothing applies until clicked. */
 export function TriagePanel({ cardId, socket }: { cardId: string; socket: Socket }) {
