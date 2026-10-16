@@ -10,7 +10,8 @@ if (-not $env:RENDER_API_KEY) { throw 'Set $env:RENDER_API_KEY first (Dashboard 
 # One key at a time: an older key for this user means it was already set up (rotate by deleting it in IAM first).
 $existing = aws iam list-access-keys --user-name $user --profile pulseboard --query 'AccessKeyMetadata[].AccessKeyId' --output text
 if ($LASTEXITCODE -ne 0) { throw "aws iam list-access-keys failed (run: aws login --profile pulseboard)" }
-if ($existing.Trim()) { throw "$user already has an access key ($existing). Delete it in IAM first if you want a new one." }
+$existing = "$existing".Trim() # no keys: empty output (null) or "None"
+if ($existing -and $existing -ne 'None') { throw "$user already has an access key ($existing). Delete it in IAM first if you want a new one." }
 
 $key = aws iam create-access-key --user-name $user --profile pulseboard --output json | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0) { throw 'aws iam create-access-key failed' }
