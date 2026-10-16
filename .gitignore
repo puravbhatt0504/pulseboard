@@ -11,4 +11,4 @@ playwright-report/
 cdk.out/
 *.tsbuildinfo
 infra/*outputs.json
-demo/out/
+apps/web/demo/out/
