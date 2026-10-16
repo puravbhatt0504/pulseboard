@@ -46,30 +46,34 @@ export function AskPanel({ boardId, titles, onOpen, onClose }: Props) {
   }
 
   return (
-    <aside data-testid="ask-panel" className="fixed right-0 top-0 z-40 flex h-full w-96 flex-col gap-3 border-l border-zinc-200 bg-white p-4 shadow-xl">
+    <aside data-testid="ask-panel" className="fixed right-0 top-0 z-40 flex h-full w-96 max-w-full flex-col gap-4 border-l border-zinc-200 bg-white p-5 shadow-2xl">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold">Ask the board</h2>
-        <button onClick={onClose} aria-label="Close ask panel" className="text-zinc-500 hover:text-zinc-900">
+        <div>
+          <h2 className="font-semibold tracking-tight text-violet-800">✦ Ask the board</h2>
+          <p className="text-xs text-zinc-500">Answers come only from this board, with the cards they used.</p>
+        </div>
+        <button onClick={onClose} aria-label="Close ask panel" className="self-start rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900">
           ✕
         </button>
       </div>
       <form onSubmit={submit} className="flex gap-2 text-sm">
-        <input name="question" required maxLength={500} placeholder="What's blocking launch?" aria-label="Question" className="flex-1 rounded border border-zinc-300 px-2 py-1" />
-        <button disabled={state === "asking"} className="rounded bg-zinc-900 px-3 py-1 text-white disabled:opacity-50">
+        <input name="question" required maxLength={500} placeholder="What's blocking launch?" aria-label="Question" className="h-9 flex-1 rounded-lg border border-zinc-300 px-3 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100" />
+        <button disabled={state === "asking"} className="h-9 rounded-lg bg-violet-700 px-4 font-medium text-white hover:bg-violet-600 disabled:opacity-50">
           Ask
         </button>
       </form>
       {state === "asking" && !answer && <p className="text-sm text-zinc-500">Thinking…</p>}
       {answer && (
-        <p data-testid="ask-answer" className="whitespace-pre-wrap text-sm">
+        <p data-testid="ask-answer" className="whitespace-pre-wrap rounded-lg bg-zinc-50 p-3 text-sm leading-relaxed">
           {answer.replace(/\s?\[card:[A-Za-z0-9_-]+\]/g, "")}
         </p>
       )}
       {citations.length > 0 && (
-        <ul className="flex flex-wrap gap-2" aria-label="Sources">
+        <ul className="flex flex-wrap items-center gap-2" aria-label="Sources">
+          <li className="text-xs font-medium text-zinc-500">Sources</li>
           {citations.map((id) => (
             <li key={id}>
-              <button data-testid="citation" onClick={() => onOpen(id)} className="max-w-full truncate rounded-full bg-zinc-100 px-3 py-1 text-xs hover:bg-zinc-200">
+              <button data-testid="citation" onClick={() => onOpen(id)} className="max-w-full truncate rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs text-violet-800 hover:bg-violet-100">
                 {titles.get(id) ?? "Card"}
               </button>
             </li>

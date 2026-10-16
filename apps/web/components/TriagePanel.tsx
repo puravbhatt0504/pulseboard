@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Socket } from "socket.io-client";
 import { api } from "@/lib/api";
+import { LabelChip, PriorityChip } from "@/components/Chips";
 
 type Field = "labels" | "priority" | "assignee";
 type Member = { id: string; email: string };
@@ -61,11 +62,11 @@ export function TriagePanel({ cardId, socket }: { cardId: string; socket: Socket
 
   return (
     <section className="mb-4 space-y-2 text-sm" aria-label="Triage">
-      <dl className="grid grid-cols-[6rem_1fr] gap-y-1">
+      <dl className="grid grid-cols-[6rem_1fr] items-center gap-y-1.5">
         <dt className="text-zinc-500">Labels</dt>
-        <dd data-testid="card-labels">{t.card.labels.join(", ") || "—"}</dd>
+        <dd data-testid="card-labels" className="flex flex-wrap gap-1">{t.card.labels.length ? t.card.labels.map((l) => <LabelChip key={l} label={l} />) : "—"}</dd>
         <dt className="text-zinc-500">Priority</dt>
-        <dd data-testid="card-priority">{t.card.priority ?? "—"}</dd>
+        <dd data-testid="card-priority">{t.card.priority ? <PriorityChip priority={t.card.priority} /> : "—"}</dd>
         <dt className="text-zinc-500">Assignee</dt>
         <dd data-testid="card-assignee">{t.card.assignee ? name(t.card.assignee) : "—"}</dd>
         {eta && "p50Hours" in eta && (
@@ -79,7 +80,7 @@ export function TriagePanel({ cardId, socket }: { cardId: string; socket: Socket
       </dl>
       {s && pending.length > 0 && (
         <div data-testid="triage-suggestion" className="rounded-md border border-violet-200 bg-violet-50 p-3">
-          <p className="mb-2 text-xs text-violet-800">Suggested by AI{s.reason && `: ${s.reason}`}</p>
+          <p className="mb-2 text-xs text-violet-800"><span className="font-semibold">✦ Suggested by AI</span>{s.reason && ` · ${s.reason}`}</p>
           <ul className="flex flex-wrap gap-2">
             {pending.map(([field, value]) => (
               <li key={field} className="flex items-center overflow-hidden rounded-full border border-violet-300 bg-white">

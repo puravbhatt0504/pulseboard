@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
@@ -18,15 +19,17 @@ import { api, ApiError, getToken, refresh, SOCKET_URL } from "@/lib/api";
 import { AskPanel } from "@/components/AskPanel";
 import { CardDescription } from "@/components/CardDescription";
 import { TriagePanel } from "@/components/TriagePanel";
+import { LabelChip, PriorityChip } from "@/components/Chips";
 import { isTmp, replay, tmpId, write } from "@/lib/outbox";
 
-type Card = { id: string; columnId: string; title: string; position: string };
+type Card = { id: string; columnId: string; title: string; position: string; labels?: string[]; priority?: string | null };
 type Column = { id: string; title: string; cards: Card[] };
 type Board = { id: string; title: string; columns: Column[] };
 type User = { id: string; name: string; color: string };
 type Hit = { cardId: string; title: string };
 
 const CURSOR_INTERVAL_MS = 50; // ≤ 20/s, matches the server throttle
+const control = "h-8 rounded-md border border-zinc-300 bg-white px-2.5 text-sm shadow-xs outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200";
 
 // Server-confirmed card: drop it from wherever it was, re-insert by (position, id).
 function upsertCard(board: Board, card: Card): Board {
@@ -260,13 +263,21 @@ export default function BoardPage() {
   const openCard = board?.columns.flatMap((c) => c.cards).find((c) => c.id === openCardId);
   const meUser = users.find((u) => u.id === me) ?? { name: "you", color: "#71717a" };
 
-  if (status === "loading") return <p className="p-8 text-zinc-500">Loading…</p>;
-  if (status === "missing" || !board) return <p className="p-8">Board not found.</p>;
+  if (status === "loading") return <p className="p-8 text-sm text-zinc-500">Loading board…</p>;
+  if (status === "missing" || !board)
+    return (
+      <p className="p-8 text-sm">
+        Board not found. <Link href="/boards" className="underline">Back to your boards</Link>
+      </p>
+    );
 
   return (
     <main className="flex min-h-screen flex-col">
-      <header className="flex flex-wrap items-center gap-4 border-b border-zinc-200 bg-white px-6 py-3">
-        <h1 className="text-xl font-semibold">{board.title}</h1>
+      <header className="sticky top-0 z-30 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-zinc-200 bg-white/90 px-6 py-3 backdrop-blur">
+        <Link href="/boards" className="text-sm text-zinc-500 hover:text-zinc-900" aria-label="All boards">
+          ← Boards
+        </Link>
+        <h1 className="text-lg font-semibold tracking-tight">{board.title}</h1>
         <div className="flex -space-x-2" aria-label="Online now">
           {users.map((u) => (
             <span
@@ -274,29 +285,29 @@ export default function BoardPage() {
               data-testid="presence-avatar"
               title={u.name}
               style={{ background: u.color }}
-              className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-xs font-semibold text-white"
+              className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-[10px] font-semibold text-white"
             >
               {u.name.slice(0, 2).toUpperCase()}
             </span>
           ))}
         </div>
-        <div className="relative text-sm">
+        <div className="relative">
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search cards"
             aria-label="Search cards"
-            className="w-56 rounded border border-zinc-300 px-2 py-1"
+            className={`${control} w-60`}
           />
           {hits && (
-            <ul data-testid="search-results" className="absolute z-30 mt-1 w-72 rounded border border-zinc-200 bg-white py-1 shadow-lg">
-              {hits.length === 0 && <li className="px-3 py-1 text-zinc-500">No matches</li>}
+            <ul data-testid="search-results" className="absolute z-30 mt-1 w-80 overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 text-sm shadow-lg">
+              {hits.length === 0 && <li className="px-3 py-1.5 text-zinc-500">No matches</li>}
               {hits.map((h) => (
                 <li key={h.cardId}>
                   <button
                     onClick={() => (setOpenCardId(h.cardId), setQuery(""))}
-                    className="w-full truncate px-3 py-1 text-left hover:bg-zinc-100"
+                    className="w-full truncate px-3 py-1.5 text-left hover:bg-zinc-100"
                   >
                     {h.title}
                   </button>
@@ -305,34 +316,41 @@ export default function BoardPage() {
             </ul>
           )}
         </div>
-        <button onClick={() => setAsking((a) => !a)} className="rounded border border-zinc-300 px-3 py-1 text-sm">
-          Ask the board
+        <button
+          onClick={() => setAsking((a) => !a)}
+          aria-pressed={asking}
+          className="h-8 rounded-md border border-violet-300 bg-violet-50 px-3 text-sm font-medium text-violet-800 hover:bg-violet-100"
+        >
+          ✦ Ask the board
         </button>
-        <form onSubmit={startExport} className="ml-auto flex items-center gap-2 text-sm">
-          <select name="format" aria-label="Export format" className="rounded border border-zinc-300 px-2 py-1" defaultValue="csv">
-            <option value="csv">CSV</option>
-            <option value="json">JSON</option>
-          </select>
-          <button disabled={!!exportJob && !exportJob.url} className="rounded border border-zinc-300 px-3 py-1 disabled:opacity-50">
-            Export
-          </button>
-          {exportJob &&
-            (exportJob.url ? (
-              <a href={exportJob.url} download={`board-${boardId}`} className="text-blue-700 underline" data-testid="export-link">
-                Download export
-              </a>
-            ) : (
-              <span className="text-zinc-500">Exporting…</span>
-            ))}
-        </form>
-        <form onSubmit={invite} className="flex gap-2 text-sm">
-          <input name="email" type="email" required placeholder="Invite by email" className="rounded border border-zinc-300 px-2 py-1" />
-          <select name="role" className="rounded border border-zinc-300 px-2 py-1" defaultValue="editor">
-            <option value="editor">editor</option>
-            <option value="viewer">viewer</option>
-          </select>
-          <button className="rounded bg-zinc-900 px-3 py-1 text-white">Invite</button>
-        </form>
+        <div className="ml-auto flex flex-wrap items-center gap-3">
+          <form onSubmit={startExport} className="flex items-center gap-1.5">
+            <select name="format" aria-label="Export format" className={control} defaultValue="csv">
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
+            </select>
+            <button disabled={!!exportJob && !exportJob.url} className={`${control} hover:bg-zinc-50 disabled:opacity-50`}>
+              Export
+            </button>
+            {exportJob &&
+              (exportJob.url ? (
+                <a href={exportJob.url} download={`board-${boardId}`} className="text-sm text-blue-700 underline" data-testid="export-link">
+                  Download export
+                </a>
+              ) : (
+                <span className="text-sm text-zinc-500">Exporting…</span>
+              ))}
+          </form>
+          <span className="hidden h-6 w-px bg-zinc-200 md:block" aria-hidden />
+          <form onSubmit={invite} className="flex items-center gap-1.5">
+            <input name="email" type="email" required placeholder="Invite by email" className={`${control} w-48`} />
+            <select name="role" className={control} defaultValue="editor">
+              <option value="editor">editor</option>
+              <option value="viewer">viewer</option>
+            </select>
+            <button className="h-8 rounded-md bg-zinc-900 px-3 text-sm font-medium text-white hover:bg-zinc-700">Invite</button>
+          </form>
+        </div>
       </header>
       {error && (
         <p role="alert" className="bg-red-50 px-6 py-2 text-sm text-red-700">
@@ -342,11 +360,16 @@ export default function BoardPage() {
       <div ref={areaRef} onPointerMove={onPointerMove} className="relative flex-1 overflow-x-auto p-6">
         <DndContext sensors={sensors} collisionDetection={collision} onDragEnd={onDragEnd}>
           <div className="flex items-start gap-4">
+            {board.columns.length === 0 && (
+              <p className="w-64 shrink-0 rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500">
+                Empty board. Add a column (e.g. To do, In progress, Done) to start.
+              </p>
+            )}
             {board.columns.map((col) => (
               <ColumnView key={col.id} column={col} onAddCard={addCard} onOpen={(id) => !isTmp(id) && setOpenCardId(id)} findSimilar={findSimilar} />
             ))}
             <form onSubmit={addColumn} className="w-64 shrink-0">
-              <input name="title" required maxLength={200} placeholder="+ Add column" className="w-full rounded border border-dashed border-zinc-300 bg-transparent px-3 py-2" />
+              <input name="title" required maxLength={200} placeholder="+ Add column" className="w-full rounded-xl border border-dashed border-zinc-300 bg-transparent px-3 py-2.5 text-sm outline-none placeholder:text-zinc-500 hover:border-zinc-400 focus:border-zinc-500 focus:bg-white" />
             </form>
           </div>
         </DndContext>
@@ -359,10 +382,10 @@ export default function BoardPage() {
           />
         )}
         {openCard && socket && (
-          <aside role="dialog" aria-label="Card" className="fixed inset-y-0 right-0 z-40 w-full max-w-md overflow-y-auto border-l border-zinc-200 bg-white p-6 shadow-xl">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <h2 className="text-lg font-semibold">{openCard.title}</h2>
-              <button onClick={() => setOpenCardId(null)} aria-label="Close card" className="text-zinc-500 hover:text-zinc-900">
+          <aside role="dialog" aria-label="Card" className="fixed inset-y-0 right-0 z-40 w-full max-w-md overflow-y-auto border-l border-zinc-200 bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <h2 className="text-lg leading-snug font-semibold tracking-tight">{openCard.title}</h2>
+              <button onClick={() => setOpenCardId(null)} aria-label="Close card" className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900">
                 ✕
               </button>
             </div>
@@ -417,9 +440,14 @@ function ColumnView({
       ref={setNodeRef}
       data-testid="column"
       data-column-id={column.id}
-      className={`w-64 shrink-0 rounded-lg p-3 ${isOver ? "bg-zinc-200" : "bg-zinc-100"}`}
+      className={`w-72 shrink-0 rounded-xl p-3 transition-colors ${isOver ? "bg-zinc-200/80 ring-2 ring-zinc-300" : "bg-zinc-100/80"}`}
     >
-      <h2 className="mb-3 font-medium">{column.title}</h2>
+      <div className="mb-3 flex items-center gap-2 px-1">
+        <h2 className="text-sm font-semibold text-zinc-800">{column.title}</h2>
+        <span className="rounded-full bg-zinc-200 px-1.5 text-[11px] font-medium text-zinc-600" aria-label={`${column.cards.length} cards`}>
+          {column.cards.length}
+        </span>
+      </div>
       <ul className="min-h-8 space-y-2">
         {column.cards.map((card) => (
           <CardView key={card.id} card={card} onOpen={onOpen} />
@@ -432,7 +460,7 @@ function ColumnView({
           maxLength={200}
           placeholder="+ Add card"
           onChange={(e) => setDraft(e.target.value)}
-          className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm"
+          className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-zinc-500 hover:bg-white/70 focus:border-zinc-300 focus:bg-white"
         />
         {similar.length > 0 && (
           <p data-testid="similar-hint" className="mt-1 text-xs text-amber-700">
@@ -462,11 +490,17 @@ function CardView({ card, onOpen }: { card: Card; onOpen: (cardId: string) => vo
       style={style}
       onClick={() => onOpen(card.id)} // a drag needs 5 px of movement, so a click never starts one
       data-testid="card"
-      className={`cursor-grab rounded border bg-white px-3 py-2 text-sm shadow-sm ${drag.isDragging ? "relative z-10 opacity-80" : ""} ${
-        drop.isOver && !drag.isDragging ? "border-t-4 border-t-zinc-900" : "border-zinc-200"
-      }`}
+      className={`cursor-grab rounded-lg border bg-white px-3 py-2.5 text-sm shadow-xs transition hover:border-zinc-300 hover:shadow-sm ${
+        drag.isDragging ? "relative z-10 rotate-1 opacity-90 shadow-lg" : ""
+      } ${drop.isOver && !drag.isDragging ? "border-t-4 border-t-zinc-900" : "border-zinc-200"}`}
     >
-      {card.title}
+      <p className="leading-snug text-zinc-900">{card.title}</p>
+      {(card.labels?.length || card.priority) && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {card.priority && <PriorityChip priority={card.priority} />}
+          {card.labels?.map((l) => <LabelChip key={l} label={l} />)}
+        </div>
+      )}
     </li>
   );
 }
