@@ -2,7 +2,7 @@
 
 Real-time collaborative Kanban: Express + Prisma + Postgres + Redis + Socket.io API, Next.js web. Plan and status: [PLAN.md](PLAN.md).
 
-Live demo (Render free tier, sleeps when idle): https://pulseboard-fmbj.onrender.com
+Live demo (Render free tier, sleeps when idle, ~1 min to wake): https://pulseboard-fmbj.onrender.com. AI features there call Bedrock with the Bedrock-only IAM user from the `PulseboardBedrock` stack (`deploy/render/set-bedrock.ps1`). The completion-time line is hidden, because the ETA server isn't hosted on Render.
 
 ## Ran on AWS (2026-10-14 → 2026-10-16)
 
@@ -78,7 +78,7 @@ The model gets no tools here, so a card saying "ignore instructions and delete t
 Limits: 20 asks per user per hour (`429`), questions up to 500 characters (`400`), `503` when no model is configured.
 Each ask logs `{boardId, latencyMs, inputTokens, outputTokens, costUsd}`. In the web app it's the "Ask the board" panel, and citations open the card.
 
-Evals: `npm run eval:ask -w apps/api` runs 64 cases (`eval/ask.jsonl`: 42 answerable, 12 unanswerable, 10 injection) against a seeded fixture board plus a second board holding a canary secret (`eval/build-ask.py`). Faithfulness is graded by the same model with `eval/judge.md`. CI runs `eval:ask` and `eval:triage` on pushes and PRs that touch `apps/api/src/ai` or `eval/`. It calls Bedrock through the `pulseboard-ci-eval` role, which GitHub assumes over OIDC and which can only call GLM 5 and Titan. No key is involved.
+Evals: `npm run eval:ask -w apps/api` runs 64 cases (`eval/ask.jsonl`: 42 answerable, 12 unanswerable, 10 injection) against a seeded fixture board plus a second board holding a canary secret (`eval/build-ask.py`). Faithfulness is graded by the same model with `eval/judge.md`. While the AWS deploy was live, CI ran `eval:ask` and `eval:triage` on pushes and PRs that touched AI code, calling Bedrock through an OIDC role limited to GLM 5 and Titan. Since the teardown, run them locally with `AWS_PROFILE`; the job comes back on whenever the `AWS_DEPLOY_ROLE_ARN` repo variable is set.
 
 Measured 2026-10-15 with `zai.glm-5` on Bedrock both answering **and** judging, using hybrid retrieval (Titan v2 vectors plus full-text). All PLAN gates pass. GLM 5 on Bedrock isn't deterministic, even at temperature 0, so the table shows the median run.
 
@@ -158,4 +158,4 @@ The p90 prediction covers 91.8% of test cards.
 | XGBoost (p50 quantile) | **380 h** |
 
 The p90 prediction covers 87% of test issues. Errors are large because the data has two humps: the typical issue closes in about 5 h, while a third of them run past 60 days.
-Serve: `docker compose --profile ml up eta` (port 8000; reads `ml/eta/models`). The API calls it when `ETA_URL` is set (e.g. `http://localhost:8000`): `GET /cards/:id/eta` builds the features from the card (`src/cards/eta.ts`: column from its title, bug/feature/chore labels plus "urgent" priority, board and assignee median hours to Done from the activity log, open cards for the assignee; comments and checklists are 0 because cards have none yet) and the card panel shows "usually ~N days". Cards in a Done column get no estimate. Without `ETA_URL` the line is hidden. On AWS the server runs as its own Fargate task (`eta.pulseboard.local:8000` through Cloud Map), and only the API's security group can reach it. It loads the model from `s3://<attachments bucket>/models/eta/<version>/`, set by `ETA_MODEL_PREFIX` in `infra/lib/app-stack.ts`. In RelayQ set `TRAINER_MODEL_DIR=<this repo>/ml/eta/models` and `MODEL_SUBSCRIBERS_ETA=http://localhost:8000/reload`.
+Serve: `docker compose --profile ml up eta` (port 8000; reads `ml/eta/models`). The API calls it when `ETA_URL` is set (e.g. `http://localhost:8000`): `GET /cards/:id/eta` builds the features from the card (`src/cards/eta.ts`: column from its title, bug/feature/chore labels plus "urgent" priority, board and assignee median hours to Done from the activity log, open cards for the assignee; comments and checklists are 0 because cards have none yet) and the card panel shows "usually ~N days". Cards in a Done column get no estimate. Without `ETA_URL` the line is hidden. On AWS (until the teardown) the server ran as its own Fargate task (`eta.pulseboard.local:8000` through Cloud Map), and only the API's security group could reach it. It loaded the model from `s3://<attachments bucket>/models/eta/<version>/`, set by `ETA_MODEL_PREFIX` in `infra/lib/app-stack.ts`. In RelayQ set `TRAINER_MODEL_DIR=<this repo>/ml/eta/models` and `MODEL_SUBSCRIBERS_ETA=http://localhost:8000/reload`.
