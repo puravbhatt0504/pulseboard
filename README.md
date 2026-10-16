@@ -4,6 +4,8 @@ Real-time collaborative Kanban: Express + Prisma + Postgres + Redis + Socket.io 
 
 Live demo (Render free tier, sleeps when idle, ~1 min to wake): https://pulseboard-fmbj.onrender.com. AI features there call Bedrock with the Bedrock-only IAM user from the `PulseboardBedrock` stack (`deploy/render/set-bedrock.ps1`). The completion-time line is hidden, because the ETA server isn't hosted on Render.
 
+[Realtime demo video](docs/realtime-demo.mp4) (20 s): two people on one board, side by side. Cards appear live on the other screen, a drag shows the other person's cursor carrying the card, and both type into one card description with named carets. Re-record it with `npx playwright test -c demo/playwright.config.ts && node demo/make-video.mjs` from `apps/web` (needs ffmpeg).
+
 ## Ran on AWS (2026-10-14 → 2026-10-16)
 
 The full stack ran in production on AWS (ap-south-1), deployed by CI on every push to main, and was then torn down to save cost. The Render demo above runs the same code.
