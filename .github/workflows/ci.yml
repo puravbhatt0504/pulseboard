@@ -62,7 +62,9 @@ jobs:
 
   # Phase 11/12 gates: ask + triage evals on Bedrock (GLM 5, Titan) when AI code or eval data changes.
   # The role is created by PulseboardApp (pulseboard-ci-eval): Bedrock on those two models only.
+  # Off with AWS (same switch as deploy): the role is gone after teardown. Run the evals locally then.
   eval-ask:
+    if: vars.AWS_DEPLOY_ROLE_ARN != ''
     runs-on: ubuntu-latest
     permissions: { id-token: write, contents: read }
     env:
