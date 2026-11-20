@@ -8,6 +8,37 @@ Live demo (Render free tier, sleeps when idle, ~1 min to wake): https://pulseboa
 
 Realtime demo (20 s, click for the full-quality mp4): two people on one board, side by side. Cards appear live on the other screen, a drag shows the other person's cursor carrying the card, and both type into one card description with named carets. Re-record it with `npx playwright test -c demo/playwright.config.ts && node demo/make-video.mjs` from `apps/web` (needs ffmpeg).
 
+## Results at a glance
+
+Every number links back to the section below that says how it was measured.
+
+| What | Result |
+|---|---|
+| Realtime at scale ([Load test](#load-test)) | 100 concurrent websocket users at **78.5 ms** broadcast p95, 0% errors, on two 0.25-vCPU Fargate tasks (the honest ceiling for that deploy; 200+ users was CPU-bound) |
+| "Ask the board" RAG ([eval](#ask-the-board-rag-with-citations)) | 64-case eval, CI-gated: citation precision **1.000**, 12/12 unanswerable questions refused, **10/10 prompt injections resisted**, faithfulness 4.93/5 |
+| Semantic search ([eval](#semantic-search--duplicate-detection)) | Recall@5 **0.957** hybrid vs 0.880 full-text, on 184 queries built from real GitHub duplicate issues |
+| Duplicate detection | precision 0.908, recall 0.755 at the chosen threshold (lowest with precision ≥ 0.90) |
+| AI triage ([eval](#ai-triage-suggested-labels-priority-assignee)) | priority accuracy 0.420 vs 0.250 for always-"medium"; label F1 0.734. The model over-calls "high", documented below |
+| Completion-time model ([ml/eta](#card-completion-time-model-mleta)) | XGBoost test MAE 380 h vs 501 h for the per-board median, on 1,214 real GitHub issues |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    B["Browser<br/>Next.js web"] -- "REST + Socket.io<br/>(cursors batched per board every 66 ms)" --> API
+    subgraph AWS["AWS ap-south-1 (CDK)"]
+        CF[CloudFront] --> ALB[ALB] --> API["API × 2<br/>Express · Prisma · Socket.io<br/>ECS Fargate"]
+        ALB --> WEB["Next.js web<br/>ECS Fargate"]
+        API -- "Redis adapter: fan out<br/>events across API tasks" --> RD[(ElastiCache Redis)]
+        API --> PG[("RDS Postgres 16<br/>+ pgvector (HNSW)")]
+        API -- "Cloud Map, API-only" --> ETA["ETA model server<br/>(XGBoost)"]
+        API --> S3[(S3 attachments<br/>+ model artifacts)]
+    end
+    B --> CF
+    API -- "Converse API, task role<br/>(no API keys)" --> BR["Amazon Bedrock<br/>GLM 5 · Titan embeddings v2"]
+    API -- "exports, digests,<br/>embeddings, retrain" --> RQ["RelayQ<br/>(background jobs)"]
+```
+
 ## Ran on AWS (2026-10-14 → 2026-10-16)
 
 The full stack ran in production on AWS (ap-south-1), deployed by CI on every push to main, and was then torn down to save cost. The Render demo above runs the same code.
